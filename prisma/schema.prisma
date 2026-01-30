@@ -1,0 +1,213 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum CVStatus {
+  PENDING
+  EXTRACTED
+  EDITING
+  IMPROVED
+  GENERATED
+  COMPLETED
+}
+
+enum Brand {
+  DREAMIT
+  RUPTURAE
+}
+
+enum ExecutionStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum StepStatus {
+  PENDING
+  WAITING_INPUTS
+  RUNNING
+  COMPLETED
+  FAILED
+  SKIPPED
+}
+
+model CV {
+  id              String    @id @default(cuid())
+
+  // Source file info
+  originalName    String
+  originalKey     String    // B2 key for original file
+  originalUrl     String?   // Public URL if available
+
+  // Consultant info (extracted)
+  consultantName  String?
+  title           String?
+
+  // Extracted/edited content
+  markdownContent String?   @db.Text
+
+  // Missing info tracking
+  missingFields   String[]  @default([])
+
+  // Status tracking
+  status          CVStatus  @default(PENDING)
+  brand           Brand     @default(DREAMIT)
+
+  // Generated file
+  generatedKey    String?   // B2 key for generated DOCX
+  generatedUrl    String?
+
+  // Timestamps
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  extractedAt     DateTime?
+  generatedAt     DateTime?
+
+  // Improvements history
+  improvements    Improvement[]
+
+  // Workflow executions
+  workflowExecutions WorkflowExecution[]
+}
+
+model Improvement {
+  id          String   @id @default(cuid())
+  cv          CV       @relation(fields: [cvId], references: [id], onDelete: Cascade)
+  cvId        String
+
+  agentType   String   // enrichisseur, adaptateur, contexte, bio
+  prompt      String   @db.Text
+  result      String   @db.Text
+  appliedAt   DateTime @default(now())
+}
+
+model Template {
+  id          String   @id @default(cuid())
+  name        String   @unique  // DREAMIT, RUPTURAE, etc.
+  displayName String
+
+  // Couleurs
+  primaryColor   String  @default("#1E3A8A")
+  secondaryColor String  @default("#3B82F6")
+
+  // Logo (stocké en base64 ou URL B2)
+  logoUrl     String?
+
+  // Structure du template (JSON)
+  config      String   @db.Text  // JSON avec les paramètres du template
+
+  // Métadonnées
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model AIAgent {
+  id                 String   @id @default(cuid())
+  name               String   @unique  // enrichisseur, adaptateur, contexte, bio, extraction
+  displayName        String
+  description        String   @db.Text
+
+  // Prompts
+  systemPrompt       String   @db.Text
+  userPromptTemplate String   @db.Text  // Template avec placeholders {{markdown}}, {{context}}
+
+  // Métadonnées
+  isActive           Boolean  @default(true)
+  order              Int      @default(0)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  // Connexions pour workflow
+  sourceConnections  AgentConnection[] @relation("SourceAgent")
+  targetConnections  AgentConnection[] @relation("TargetAgent")
+  workflowSteps      WorkflowStep[]
+}
+
+model AgentConnection {
+  id            String   @id @default(cuid())
+
+  // Agent source (celui qui envoie des données)
+  sourceAgentId String
+  sourceAgent   AIAgent  @relation("SourceAgent", fields: [sourceAgentId], references: [id], onDelete: Cascade)
+
+  // Agent cible (celui qui reçoit les données)
+  targetAgentId String
+  targetAgent   AIAgent  @relation("TargetAgent", fields: [targetAgentId], references: [id], onDelete: Cascade)
+
+  // Ordre d'exécution et état
+  order         Int      @default(0)
+  isActive      Boolean  @default(true)
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([sourceAgentId, targetAgentId])
+  @@index([sourceAgentId])
+  @@index([targetAgentId])
+}
+
+model WorkflowExecution {
+  id          String          @id @default(cuid())
+
+  // CV concerné
+  cvId        String
+  cv          CV              @relation(fields: [cvId], references: [id], onDelete: Cascade)
+
+  // Statut global
+  status      ExecutionStatus @default(PENDING)
+
+  // Données d'entrée initiales
+  inputData   String?         @db.Text  // JSON avec contexte additionnel
+
+  // Résultat final
+  outputData  String?         @db.Text  // JSON avec résultat agrégé
+  error       String?         @db.Text
+
+  // Timestamps
+  startedAt   DateTime        @default(now())
+  completedAt DateTime?
+
+  // Étapes d'exécution
+  steps       WorkflowStep[]
+}
+
+model WorkflowStep {
+  id           String      @id @default(cuid())
+
+  // Référence à l'exécution
+  executionId  String
+  execution    WorkflowExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+
+  // Agent concerné
+  agentId      String
+  agent        AIAgent     @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  // Statut de l'étape
+  status       StepStatus  @default(PENDING)
+
+  // Données d'entrée (reçues des agents sources)
+  inputData    String?     @db.Text  // JSON
+
+  // Résultat de l'agent
+  outputData   String?     @db.Text  // JSON
+  error        String?     @db.Text
+
+  // Timestamps
+  startedAt    DateTime?
+  completedAt  DateTime?
+
+  // BullMQ job tracking
+  jobId        String?     @unique
+
+  @@index([executionId])
+  @@index([agentId])
+  @@index([jobId])
+}

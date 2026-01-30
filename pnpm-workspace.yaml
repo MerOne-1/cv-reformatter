@@ -1,0 +1,6 @@
+onlyBuiltDependencies:
+  - prisma
+  - '@prisma/client'
+  - '@prisma/engines'
+  - esbuild
+  - sharp
