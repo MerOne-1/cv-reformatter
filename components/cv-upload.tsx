@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { Upload, Loader2, CheckCircle2, FileUp, Sparkles } from 'lucide-react';
+import { Upload, Loader2, CheckCircle2, FileUp, Sparkles, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface CVUploadProps {
@@ -13,6 +13,7 @@ export function CVUpload({ onUploadComplete, compact }: CVUploadProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploaded, setUploaded] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -39,9 +40,15 @@ export function CVUpload({ onUploadComplete, compact }: CVUploadProps) {
   const handleFiles = async (files: FileList | File[]) => {
     const fileArray = Array.from(files);
     const validFiles = fileArray.filter(f => /\.(pdf|docx?|doc)$/i.test(f.name));
-    if (validFiles.length === 0) return;
+
+    if (validFiles.length === 0) {
+      setError('Format non supporté. Utilisez PDF, DOC ou DOCX.');
+      setTimeout(() => setError(null), 4000);
+      return;
+    }
 
     setUploading(true);
+    setError(null);
     try {
       for (const file of validFiles) {
         const name = await uploadFile(file);
@@ -52,7 +59,10 @@ export function CVUpload({ onUploadComplete, compact }: CVUploadProps) {
         setUploaded(null);
       }, 1200);
     } catch (err) {
-      console.error(err);
+      const message = err instanceof Error ? err.message : 'Erreur lors de l\'upload';
+      console.error('Upload error:', err);
+      setError(message);
+      setTimeout(() => setError(null), 5000);
     } finally {
       setUploading(false);
     }
@@ -61,12 +71,36 @@ export function CVUpload({ onUploadComplete, compact }: CVUploadProps) {
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
-    handleFiles(e.dataTransfer.files);
-  }, []);
+    const files = e.dataTransfer.files;
+    const fileArray = Array.from(files);
+    const validFiles = fileArray.filter(f => /\.(pdf|docx?|doc)$/i.test(f.name));
+
+    if (validFiles.length === 0) {
+      setError('Format non supporté. Utilisez PDF, DOC ou DOCX.');
+      setTimeout(() => setError(null), 4000);
+      return;
+    }
+
+    handleFiles(validFiles);
+  }, [onUploadComplete]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) handleFiles(e.target.files);
   };
+
+  if (error) {
+    return (
+      <div className="flex items-center gap-3 p-3 rounded-xl bg-destructive/10 border border-destructive/20 animate-scale-in">
+        <div className="w-8 h-8 rounded-lg bg-destructive/20 flex items-center justify-center">
+          <AlertCircle className="w-4 h-4 text-destructive" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-medium text-destructive truncate">{error}</p>
+          <p className="text-[10px] text-destructive/70">Erreur d'upload</p>
+        </div>
+      </div>
+    );
+  }
 
   if (uploaded) {
     return (

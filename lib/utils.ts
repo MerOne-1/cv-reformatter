@@ -78,28 +78,26 @@ export async function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-export function retryWithBackoff<T>(
+export async function retryWithBackoff<T>(
   fn: () => Promise<T>,
   maxRetries: number = 3,
   baseDelay: number = 1000
 ): Promise<T> {
-  return new Promise(async (resolve, reject) => {
-    let lastError: Error | null = null;
+  let lastError: Error | null = null;
 
-    for (let attempt = 0; attempt < maxRetries; attempt++) {
-      try {
-        const result = await fn();
-        return resolve(result);
-      } catch (error) {
-        lastError = error as Error;
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error as Error;
+      console.warn(`Tentative ${attempt + 1}/${maxRetries} échouée:`, lastError.message);
 
-        if (attempt < maxRetries - 1) {
-          const delay = baseDelay * Math.pow(2, attempt);
-          await sleep(delay);
-        }
+      if (attempt < maxRetries - 1) {
+        const delay = baseDelay * Math.pow(2, attempt);
+        await sleep(delay);
       }
     }
+  }
 
-    reject(lastError);
-  });
+  throw lastError;
 }

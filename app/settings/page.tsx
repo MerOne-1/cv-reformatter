@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, AccentCard } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -23,6 +23,7 @@ import {
   Bot,
   Sparkles,
   GitBranch,
+  Trash2,
 } from 'lucide-react';
 
 interface Template {
@@ -31,7 +32,9 @@ interface Template {
   displayName: string;
   primaryColor: string;
   secondaryColor: string;
-  logoUrl: string | null;
+  logoUrl: string | null; // Legacy - utilisez logoHeaderUrl/logoFooterUrl
+  logoHeaderUrl: string | null;
+  logoFooterUrl: string | null;
   config: string;
   isActive: boolean;
 }

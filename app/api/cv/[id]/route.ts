@@ -124,33 +124,34 @@ export async function DELETE(
     }
 
     // Supprimer les fichiers de Backblaze B2
-    const deletePromises: Promise<void>[] = [];
+    const deleteResults = await Promise.allSettled([
+      cv.originalKey ? deleteFile(cv.originalKey) : Promise.resolve(),
+      cv.generatedKey ? deleteFile(cv.generatedKey) : Promise.resolve(),
+    ]);
 
-    // Supprimer le fichier original
-    if (cv.originalKey) {
-      deletePromises.push(
-        deleteFile(cv.originalKey).catch((err) => {
-          console.error(`Failed to delete original file ${cv.originalKey}:`, err);
-        })
-      );
-    }
-
-    // Supprimer le fichier généré s'il existe
-    if (cv.generatedKey) {
-      deletePromises.push(
-        deleteFile(cv.generatedKey).catch((err) => {
-          console.error(`Failed to delete generated file ${cv.generatedKey}:`, err);
-        })
-      );
-    }
-
-    // Attendre que tous les fichiers soient supprimés
-    await Promise.all(deletePromises);
+    // Logger les erreurs de suppression B2 mais continuer avec la suppression DB
+    const failedDeletions: string[] = [];
+    deleteResults.forEach((result, index) => {
+      if (result.status === 'rejected') {
+        const key = index === 0 ? cv.originalKey : cv.generatedKey;
+        console.error(`Échec de suppression du fichier B2 ${key}:`, result.reason);
+        failedDeletions.push(key || 'unknown');
+      }
+    });
 
     // Supprimer le CV de la base de données
     await prisma.cV.delete({
       where: { id },
     });
+
+    // Inclure un avertissement si certains fichiers B2 n'ont pas pu être supprimés
+    if (failedDeletions.length > 0) {
+      return NextResponse.json({
+        success: true,
+        message: 'CV deleted from database, but some files could not be deleted from storage',
+        warnings: failedDeletions.map(key => `Failed to delete: ${key}`),
+      });
+    }
 
     return NextResponse.json({
       success: true,

@@ -151,11 +151,10 @@ export interface B2File {
   contentType?: string;
 }
 
-export interface APIResponse<T = unknown> {
-  success: boolean;
-  data?: T;
-  error?: string;
-}
+// Discriminated union pour APIResponse - garantit la cohérence success/data/error
+export type APIResponse<T = unknown> =
+  | { success: true; data: T }
+  | { success: false; error: string };
 
 // CV Markdown structure
 export interface CVSection {
@@ -211,28 +210,5 @@ export function detectMissingFields(markdown: string): string[] {
   return Array.from(new Set(missingFields));
 }
 
-export function extractConsultantNameFromFilename(filename: string): string | null {
-  // Remove extension
-  const nameWithoutExt = filename.replace(/\.(pdf|docx|doc)$/i, '');
-
-  // Try to extract name (common patterns: CV_Prenom_Nom, Prenom-Nom_CV, etc.)
-  const patterns = [
-    /^CV[_-]?(.+)/i,
-    /(.+)[_-]?CV$/i,
-    /^(.+)$/,
-  ];
-
-  for (const pattern of patterns) {
-    const match = nameWithoutExt.match(pattern);
-    if (match) {
-      return match[1]
-        .replace(/[_-]/g, ' ')
-        .trim()
-        .split(' ')
-        .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-        .join(' ');
-    }
-  }
-
-  return null;
-}
+// Note: extractConsultantNameFromFilename est défini dans lib/utils.ts
+// Importer depuis utils.ts si nécessaire

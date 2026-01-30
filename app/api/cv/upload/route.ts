@@ -3,6 +3,9 @@ import { uploadFile, getRawCVKey } from '@/lib/b2';
 import prisma from '@/lib/db';
 import { isValidCVFile } from '@/lib/utils';
 
+// Limite de taille de fichier: 10 Mo
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
+
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
@@ -18,6 +21,14 @@ export async function POST(request: NextRequest) {
     if (!isValidCVFile(file.name)) {
       return NextResponse.json(
         { success: false, error: 'Invalid file type. Only PDF, DOC, DOCX are allowed.' },
+        { status: 400 }
+      );
+    }
+
+    // Validation de la taille du fichier
+    if (file.size > MAX_FILE_SIZE) {
+      return NextResponse.json(
+        { success: false, error: 'File too large. Maximum size is 10 MB.' },
         { status: 400 }
       );
     }

@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { downloadFile } from '@/lib/b2';
-import { askMistral } from '@/lib/mistral';
+import { askLLM } from '@/lib/llm';
 import { EXTRACTION_SYSTEM_PROMPT, EXTRACTION_USER_PROMPT } from '@/lib/prompts/extraction';
-import { detectMissingFields, extractConsultantNameFromFilename } from '@/lib/types';
-import { getFileExtension } from '@/lib/utils';
+import { detectMissingFields } from '@/lib/types';
+import { getFileExtension, extractConsultantNameFromFilename } from '@/lib/utils';
 import { z } from 'zod';
 
 // Dynamic imports for file parsers
@@ -64,8 +64,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Use Mistral to structure the content
-    const markdownContent = await askMistral(
+    // Use LLM to structure the content
+    const markdownContent = await askLLM(
       EXTRACTION_SYSTEM_PROMPT,
       EXTRACTION_USER_PROMPT(rawText)
     );

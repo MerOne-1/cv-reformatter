@@ -65,11 +65,16 @@ function getStaticPrompts(agentType: string, markdown: string, context?: string)
   }
 }
 
+export interface AgentPromptsResult extends AgentPrompts {
+  usedFallback: boolean;
+  fallbackReason?: string;
+}
+
 export async function getAgentPrompts(
   agentType: string,
   markdown: string,
   context?: string
-): Promise<AgentPrompts> {
+): Promise<AgentPromptsResult> {
   try {
     const agent = await prisma.aIAgent.findUnique({
       where: { name: agentType },
@@ -79,18 +84,38 @@ export async function getAgentPrompts(
       return {
         system: agent.systemPrompt,
         user: processTemplate(agent.userPromptTemplate, markdown, context),
+        usedFallback: false,
       };
     }
 
-    console.warn(`Agent ${agentType} not found in DB or inactive, using static prompts`);
-    return getStaticPrompts(agentType, markdown, context);
+    const reason = agent ? 'Agent inactif' : 'Agent non trouvé en DB';
+    console.warn(`Agent ${agentType}: ${reason}, utilisation des prompts statiques`);
+    return {
+      ...getStaticPrompts(agentType, markdown, context),
+      usedFallback: true,
+      fallbackReason: reason,
+    };
   } catch (error) {
-    console.error(`Error fetching agent ${agentType} from DB:`, error);
-    return getStaticPrompts(agentType, markdown, context);
+    const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+    console.error(`Erreur lors de la récupération de l'agent ${agentType}:`, error);
+    return {
+      ...getStaticPrompts(agentType, markdown, context),
+      usedFallback: true,
+      fallbackReason: `Erreur DB: ${errorMessage}`,
+    };
   }
 }
 
-export async function getActiveAgents() {
+export interface GetActiveAgentsResult {
+  agents: Array<{
+    name: string;
+    displayName: string;
+    description: string | null;
+  }>;
+  error?: string;
+}
+
+export async function getActiveAgents(): Promise<GetActiveAgentsResult> {
   try {
     const agents = await prisma.aIAgent.findMany({
       where: { isActive: true },
@@ -101,9 +126,10 @@ export async function getActiveAgents() {
         description: true,
       },
     });
-    return agents;
+    return { agents };
   } catch (error) {
-    console.error('Error fetching active agents:', error);
-    return [];
+    const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+    console.error('Erreur lors de la récupération des agents actifs:', error);
+    return { agents: [], error: errorMessage };
   }
 }
