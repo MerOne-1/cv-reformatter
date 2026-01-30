@@ -15,8 +15,8 @@ vi.mock('@/lib/b2', () => ({
   downloadFile: vi.fn(),
 }));
 
-vi.mock('@/lib/anthropic', () => ({
-  askClaude: vi.fn(),
+vi.mock('@/lib/llm', () => ({
+  askLLM: vi.fn(),
 }));
 
 describe('detectMissingFields', () => {

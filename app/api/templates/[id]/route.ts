@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { z } from 'zod';
+import { TemplateConfigSchema, toTemplateWithParsedConfig } from '@/lib/templates/types';
+import { deleteTemplateLogo } from '@/lib/templates/template-utils';
 
-// GET single template
+// GET single template with parsed config
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -23,7 +25,7 @@ export async function GET(
 
     return NextResponse.json({
       success: true,
-      data: template,
+      data: toTemplateWithParsedConfig(template),
     });
   } catch (error) {
     console.error('Error fetching template:', error);
@@ -38,8 +40,13 @@ const updateTemplateSchema = z.object({
   displayName: z.string().min(1).max(100).optional(),
   primaryColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
   secondaryColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
+  textColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
+  mutedColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
   logoUrl: z.string().nullable().optional(),
-  config: z.record(z.any()).optional(),
+  logoHeaderUrl: z.string().url().nullable().optional(),
+  logoFooterUrl: z.string().url().nullable().optional(),
+  website: z.string().nullable().optional(),
+  config: TemplateConfigSchema.optional(),
   isActive: z.boolean().optional(),
 });
 
@@ -53,8 +60,22 @@ export async function PATCH(
     const body = await request.json();
     const data = updateTemplateSchema.parse(body);
 
-    const updateData: Record<string, unknown> = { ...data };
-    if (data.config) {
+    const updateData: Record<string, unknown> = {};
+
+    // Copy simple fields
+    if (data.displayName !== undefined) updateData.displayName = data.displayName;
+    if (data.primaryColor !== undefined) updateData.primaryColor = data.primaryColor;
+    if (data.secondaryColor !== undefined) updateData.secondaryColor = data.secondaryColor;
+    if (data.textColor !== undefined) updateData.textColor = data.textColor;
+    if (data.mutedColor !== undefined) updateData.mutedColor = data.mutedColor;
+    if (data.logoUrl !== undefined) updateData.logoUrl = data.logoUrl;
+    if (data.logoHeaderUrl !== undefined) updateData.logoHeaderUrl = data.logoHeaderUrl;
+    if (data.logoFooterUrl !== undefined) updateData.logoFooterUrl = data.logoFooterUrl;
+    if (data.website !== undefined) updateData.website = data.website;
+    if (data.isActive !== undefined) updateData.isActive = data.isActive;
+
+    // Stringify config if provided
+    if (data.config !== undefined) {
       updateData.config = JSON.stringify(data.config);
     }
 
@@ -65,7 +86,7 @@ export async function PATCH(
 
     return NextResponse.json({
       success: true,
-      data: template,
+      data: toTemplateWithParsedConfig(template),
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -82,7 +103,7 @@ export async function PATCH(
   }
 }
 
-// DELETE template
+// DELETE template (also deletes logos from B2)
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -90,6 +111,25 @@ export async function DELETE(
   try {
     const { id } = await params;
 
+    // Get template to delete logos
+    const template = await prisma.template.findUnique({
+      where: { id },
+    });
+
+    if (!template) {
+      return NextResponse.json(
+        { success: false, error: 'Template not found' },
+        { status: 404 }
+      );
+    }
+
+    // Delete logos from B2 (don't fail if this errors)
+    await Promise.allSettled([
+      template.logoHeaderUrl ? deleteTemplateLogo(template.logoHeaderUrl) : Promise.resolve(),
+      template.logoFooterUrl ? deleteTemplateLogo(template.logoFooterUrl) : Promise.resolve(),
+    ]);
+
+    // Delete from database
     await prisma.template.delete({
       where: { id },
     });

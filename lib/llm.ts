@@ -1,15 +1,17 @@
 import { retryWithBackoff } from './utils';
 
-const MISTRAL_API_KEY = process.env.MISTRAL_API_KEY;
-const MISTRAL_ENDPOINT = process.env.MISTRAL_CHAT_ENDPOINT || 'https://api.mistral.ai/v1/chat/completions';
-const DEFAULT_MODEL = process.env.MISTRAL_MODEL || 'mistral-large-latest';
+// Configuration LLM générique - compatible avec OpenAI, Mistral, Groq, Together, Ollama, etc.
+const LLM_API_KEY = process.env.LLM_API_KEY;
+const LLM_ENDPOINT = process.env.LLM_ENDPOINT || 'https://api.openai.com/v1/chat/completions';
+const LLM_MODEL = process.env.LLM_MODEL || 'gpt-4o';
+const LLM_MAX_TOKENS = parseInt(process.env.LLM_MAX_TOKENS || '8192', 10);
 
-export interface MistralMessage {
+export interface LLMMessage {
   role: 'system' | 'user' | 'assistant';
   content: string;
 }
 
-interface MistralResponse {
+interface LLMResponse {
   id: string;
   object: string;
   created: number;
@@ -22,14 +24,14 @@ interface MistralResponse {
     };
     finish_reason: string;
   }[];
-  usage: {
+  usage?: {
     prompt_tokens: number;
     completion_tokens: number;
     total_tokens: number;
   };
 }
 
-export async function askMistral(
+export async function askLLM(
   systemPrompt: string,
   userPrompt: string,
   options?: {
@@ -38,81 +40,89 @@ export async function askMistral(
     temperature?: number;
   }
 ): Promise<string> {
+  if (!LLM_API_KEY) {
+    throw new Error('LLM_API_KEY non configurée. Ajoutez LLM_API_KEY dans le fichier .env');
+  }
+
   return retryWithBackoff(async () => {
-    const response = await fetch(MISTRAL_ENDPOINT, {
+    const response = await fetch(LLM_ENDPOINT, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${MISTRAL_API_KEY}`,
+        'Authorization': `Bearer ${LLM_API_KEY}`,
       },
       body: JSON.stringify({
-        model: options?.model || DEFAULT_MODEL,
+        model: options?.model || LLM_MODEL,
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt },
         ],
-        max_tokens: options?.maxTokens || 8192,
+        max_tokens: options?.maxTokens || LLM_MAX_TOKENS,
         temperature: options?.temperature ?? 0.3,
       }),
     });
 
     if (!response.ok) {
       const error = await response.text();
-      throw new Error(`Mistral API error: ${response.status} - ${error}`);
+      throw new Error(`LLM API error: ${response.status} - ${error}`);
     }
 
-    const data: MistralResponse = await response.json();
+    const data: LLMResponse = await response.json();
 
     if (!data.choices || data.choices.length === 0) {
-      throw new Error('No response from Mistral');
+      throw new Error('Pas de réponse du LLM');
     }
 
     return data.choices[0].message.content;
   }, 3, 1000);
 }
 
-export async function askMistralWithHistory(
+export async function askLLMWithHistory(
   systemPrompt: string,
-  messages: MistralMessage[],
+  messages: LLMMessage[],
   options?: {
     model?: string;
     maxTokens?: number;
     temperature?: number;
   }
 ): Promise<string> {
+  if (!LLM_API_KEY) {
+    throw new Error('LLM_API_KEY non configurée. Ajoutez LLM_API_KEY dans le fichier .env');
+  }
+
   return retryWithBackoff(async () => {
-    const allMessages: MistralMessage[] = [
+    const allMessages: LLMMessage[] = [
       { role: 'system', content: systemPrompt },
       ...messages,
     ];
 
-    const response = await fetch(MISTRAL_ENDPOINT, {
+    const response = await fetch(LLM_ENDPOINT, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${MISTRAL_API_KEY}`,
+        'Authorization': `Bearer ${LLM_API_KEY}`,
       },
       body: JSON.stringify({
-        model: options?.model || DEFAULT_MODEL,
+        model: options?.model || LLM_MODEL,
         messages: allMessages,
-        max_tokens: options?.maxTokens || 8192,
+        max_tokens: options?.maxTokens || LLM_MAX_TOKENS,
         temperature: options?.temperature ?? 0.3,
       }),
     });
 
     if (!response.ok) {
       const error = await response.text();
-      throw new Error(`Mistral API error: ${response.status} - ${error}`);
+      throw new Error(`LLM API error: ${response.status} - ${error}`);
     }
 
-    const data: MistralResponse = await response.json();
+    const data: LLMResponse = await response.json();
 
     if (!data.choices || data.choices.length === 0) {
-      throw new Error('No response from Mistral');
+      throw new Error('Pas de réponse du LLM');
     }
 
     return data.choices[0].message.content;
   }, 3, 1000);
 }
 
-export { DEFAULT_MODEL };
+export { LLM_MODEL as DEFAULT_MODEL };

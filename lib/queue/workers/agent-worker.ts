@@ -2,7 +2,7 @@ import { Worker, Job } from 'bullmq';
 import { getRedisConnection } from '../connection';
 import { QUEUE_NAMES } from '../queues';
 import prisma from '@/lib/db';
-import { askMistral } from '@/lib/mistral';
+import { askLLM } from '@/lib/llm';
 import { getAgentPrompts } from '@/lib/agents';
 import type { AgentJobData, AgentJobResult } from '@/lib/types';
 
@@ -63,7 +63,7 @@ export async function processAgentJob(job: Job<AgentJobData>): Promise<AgentJobR
       additionalContext
     );
 
-    const improvedMarkdown = await askMistral(systemPrompt, userPrompt);
+    const improvedMarkdown = await askLLM(systemPrompt, userPrompt);
 
     await prisma.workflowStep.update({
       where: { id: stepId },

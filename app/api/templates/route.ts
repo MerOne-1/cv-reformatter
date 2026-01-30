@@ -1,17 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { z } from 'zod';
+import { TemplateConfigSchema, toTemplateWithParsedConfig } from '@/lib/templates/types';
 
-// GET all templates
+// GET all templates with parsed config
 export async function GET() {
   try {
     const templates = await prisma.template.findMany({
       orderBy: { name: 'asc' },
     });
 
+    // Parse config for each template
+    const templatesWithParsedConfig = templates.map(toTemplateWithParsedConfig);
+
     return NextResponse.json({
       success: true,
-      data: templates,
+      data: templatesWithParsedConfig,
     });
   } catch (error) {
     console.error('Error fetching templates:', error);
@@ -27,8 +31,13 @@ const createTemplateSchema = z.object({
   displayName: z.string().min(1).max(100),
   primaryColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
   secondaryColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
-  logoUrl: z.string().optional(),
-  config: z.record(z.any()).optional(),
+  textColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
+  mutedColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
+  logoUrl: z.string().url().optional(),
+  logoHeaderUrl: z.string().url().optional(),
+  logoFooterUrl: z.string().url().optional(),
+  website: z.string().optional(),
+  config: TemplateConfigSchema.optional(),
 });
 
 // POST create template
@@ -39,14 +48,23 @@ export async function POST(request: NextRequest) {
 
     const template = await prisma.template.create({
       data: {
-        ...data,
+        name: data.name.toUpperCase(),
+        displayName: data.displayName,
+        primaryColor: data.primaryColor,
+        secondaryColor: data.secondaryColor,
+        textColor: data.textColor || '#1F2937',
+        mutedColor: data.mutedColor || '#6B7280',
+        logoUrl: data.logoUrl,
+        logoHeaderUrl: data.logoHeaderUrl,
+        logoFooterUrl: data.logoFooterUrl,
+        website: data.website,
         config: JSON.stringify(data.config || {}),
       },
     });
 
     return NextResponse.json({
       success: true,
-      data: template,
+      data: toTemplateWithParsedConfig(template),
     });
   } catch (error) {
     if (error instanceof z.ZodError) {

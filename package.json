@@ -20,7 +20,6 @@
     "setup:b2": "tsx scripts/setup-b2.ts"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.36.3",
     "@aws-sdk/client-s3": "^3.723.0",
     "@aws-sdk/s3-request-presigner": "^3.723.0",
     "@mdxeditor/editor": "^3.20.1",
@@ -33,6 +32,8 @@
     "@radix-ui/react-slot": "^1.1.1",
     "@radix-ui/react-tabs": "^1.1.2",
     "@radix-ui/react-toast": "^1.2.4",
+    "@react-pdf/renderer": "^4.3.2",
+    "@xyflow/react": "^12.10.0",
     "bullmq": "^5.67.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

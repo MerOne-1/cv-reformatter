@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import { Providers } from '@/components/Providers';
 
 export const metadata: Metadata = {
   title: 'CV Reformatter — ESN',
@@ -14,7 +15,7 @@ export default function RootLayout({
   return (
     <html lang="fr">
       <body className="min-h-screen bg-background">
-        {children}
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

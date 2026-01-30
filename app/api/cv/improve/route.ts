@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
-import { askMistral } from '@/lib/mistral';
+import { askLLM } from '@/lib/llm';
 import { getAgentPrompts } from '@/lib/agents';
 import { detectMissingFields } from '@/lib/types';
 import { z } from 'zod';
@@ -42,8 +42,8 @@ export async function POST(request: NextRequest) {
       additionalContext
     );
 
-    // Call Mistral
-    const improvedContent = await askMistral(system, user);
+    // Call LLM
+    const improvedContent = await askLLM(system, user);
 
     // Detect missing fields in improved content
     const missingFields = detectMissingFields(improvedContent);

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { CVListItem, CVStatus } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { CVUpload } from '@/components/cv-upload';
+import { CVUpload } from '@/components/features/cv/cv-upload';
 import { formatDate, truncateText } from '@/lib/utils';
 import {
   FileText,

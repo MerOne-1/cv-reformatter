@@ -129,7 +129,7 @@ describe('getActiveAgents', () => {
 
     const result = await getActiveAgents();
 
-    expect(result).toEqual(mockAgents);
+    expect(result).toEqual({ agents: mockAgents });
     expect(prisma.aIAgent.findMany).toHaveBeenCalledWith({
       where: { isActive: true },
       orderBy: { order: 'asc' },
@@ -141,13 +141,13 @@ describe('getActiveAgents', () => {
     });
   });
 
-  it('should return empty array on error', async () => {
+  it('should return empty array with error on failure', async () => {
     (prisma.aIAgent.findMany as ReturnType<typeof vi.fn>).mockRejectedValue(
       new Error('DB error')
     );
 
     const result = await getActiveAgents();
 
-    expect(result).toEqual([]);
+    expect(result).toEqual({ agents: [], error: 'DB error' });
   });
 });

@@ -96,12 +96,20 @@ model Template {
   // Couleurs
   primaryColor   String  @default("#1E3A8A")
   secondaryColor String  @default("#3B82F6")
+  textColor      String  @default("#1F2937")
+  mutedColor     String  @default("#6B7280")
 
-  // Logo (stocké en base64 ou URL B2)
-  logoUrl     String?
+  // Logos (URLs Backblaze B2)
+  logoUrl        String?  // @deprecated - utilisez logoHeaderUrl/logoFooterUrl
+  logoHeaderUrl  String?  // Logo en haut à gauche de la première page
+  logoFooterUrl  String?  // Logo en pied de page
 
-  // Structure du template (JSON)
-  config      String   @db.Text  // JSON avec les paramètres du template
+  // Site web du template
+  website        String?
+
+  // Structure du template (JSON validé par Zod côté application)
+  // Contient: logos config, margins, fonts, spacing, pagination, styles, sections
+  config      String   @db.Text
 
   // Métadonnées
   isActive    Boolean  @default(true)

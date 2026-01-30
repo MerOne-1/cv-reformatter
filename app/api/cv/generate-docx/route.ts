@@ -1,17 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
-import { generateDocx, getOutputFilename } from '@/lib/docx-generator';
+import {
+  generateDocx,
+  generateDocxWithTemplate,
+  getOutputFilename,
+  getOutputFilenameFromTemplate,
+} from '@/lib/docx-generator';
+import { getTemplateById, getTemplateByName } from '@/lib/templates/template-utils';
 import { z } from 'zod';
 
 const generateSchema = z.object({
   cvId: z.string(),
   brand: z.enum(['DREAMIT', 'RUPTURAE']).optional(),
+  templateId: z.string().optional(),
 });
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { cvId, brand: requestedBrand } = generateSchema.parse(body);
+    const { cvId, brand: requestedBrand, templateId } = generateSchema.parse(body);
 
     // Get CV from database
     const cv = await prisma.cV.findUnique({
@@ -32,16 +39,42 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const brand = requestedBrand || cv.brand;
+    let docxBuffer: Buffer;
+    let filename: string;
+    let brand = requestedBrand || cv.brand;
 
-    // Generate DOCX
-    const docxBuffer = await generateDocx(cv.markdownContent, brand);
+    // Priority: templateId > brand > cv.brand
+    if (templateId) {
+      // Use specific template by ID
+      const template = await getTemplateById(templateId);
+      if (!template) {
+        return NextResponse.json(
+          { success: false, error: 'Template not found' },
+          { status: 404 }
+        );
+      }
 
-    // Generate filename
-    const filename = getOutputFilename(
-      cv.consultantName || 'Consultant',
-      brand
-    );
+      docxBuffer = await generateDocxWithTemplate(cv.markdownContent, template);
+      filename = getOutputFilenameFromTemplate(cv.consultantName || 'Consultant', template);
+
+      // Update brand to match template name if it matches
+      if (template.name === 'DREAMIT' || template.name === 'RUPTURAE') {
+        brand = template.name as typeof brand;
+      }
+    } else {
+      // Use brand-based template lookup (backward compatible)
+      const template = await getTemplateByName(brand);
+
+      if (template) {
+        // Template found in database - use new generator
+        docxBuffer = await generateDocxWithTemplate(cv.markdownContent, template);
+        filename = getOutputFilenameFromTemplate(cv.consultantName || 'Consultant', template);
+      } else {
+        // Fallback to legacy generator with hardcoded colors
+        docxBuffer = await generateDocx(cv.markdownContent, brand);
+        filename = getOutputFilename(cv.consultantName || 'Consultant', brand);
+      }
+    }
 
     // Update CV status
     await prisma.cV.update({

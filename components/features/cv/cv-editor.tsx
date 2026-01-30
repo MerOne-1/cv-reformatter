@@ -5,10 +5,10 @@ import dynamic from 'next/dynamic';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { BrandSelector } from '@/components/brand-selector';
-import { MissingInfoAlert } from '@/components/missing-info-alert';
-import { AgentButtons } from '@/components/agent-buttons';
-import { WorkflowSteps } from '@/components/workflow-steps';
+import { BrandSelector } from '@/components/layout/brand-selector';
+import { MissingInfoAlert } from '@/components/layout/missing-info-alert';
+import { AgentButtons } from '@/components/features/agents/agent-buttons';
+import { WorkflowSteps } from '@/components/features/workflow/workflow-steps';
 import { CVWithImprovements, CVStatus, Brand } from '@/lib/types';
 import {
   Save,
@@ -20,6 +20,7 @@ import {
   Code2,
   Wand2,
   ChevronDown,
+  RefreshCw,
 } from 'lucide-react';
 
 const MDXEditorComponent = dynamic(
@@ -103,7 +104,16 @@ export function CVEditor({ cv, onUpdate }: CVEditorProps) {
     }
   };
 
-  const handleExtract = async () => {
+  const handleExtract = async (skipConfirmation = false) => {
+    // Si du contenu existe et n'a pas été sauvegardé, demander confirmation
+    const hasUnsavedChanges = markdown && markdown !== (cv.markdownContent || '');
+    if (!skipConfirmation && hasUnsavedChanges) {
+      const confirmed = window.confirm(
+        'Vous avez des modifications non sauvegardées. Voulez-vous vraiment régénérer et perdre ces changements ?'
+      );
+      if (!confirmed) return;
+    }
+
     try {
       setExtracting(true);
       const response = await fetch('/api/cv/extract', {
@@ -224,7 +234,7 @@ export function CVEditor({ cv, onUpdate }: CVEditorProps) {
         <div className="flex flex-wrap items-center gap-2">
           {!hasContent ? (
             <Button
-              onClick={handleExtract}
+              onClick={() => handleExtract(true)}
               disabled={extracting}
               variant="dreamit"
               className="flex-1 sm:flex-none"
@@ -234,7 +244,7 @@ export function CVEditor({ cv, onUpdate }: CVEditorProps) {
               ) : (
                 <FileSearch className="w-4 h-4 mr-2" />
               )}
-              Extraire avec Mistral AI
+              Extraire avec l'IA
             </Button>
           ) : (
             <>
@@ -245,6 +255,20 @@ export function CVEditor({ cv, onUpdate }: CVEditorProps) {
                   <Save className="w-4 h-4 mr-2" />
                 )}
                 Sauvegarder
+              </Button>
+
+              <Button
+                onClick={() => handleExtract()}
+                disabled={extracting}
+                variant="outline"
+                title="Régénérer l'extraction IA"
+              >
+                {extracting ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                )}
+                Régénérer
               </Button>
 
               <Button
@@ -336,7 +360,7 @@ export function CVEditor({ cv, onUpdate }: CVEditorProps) {
             </div>
             <h3 className="text-xl mt-6 mb-2">Prêt pour l&apos;extraction</h3>
             <p className="text-muted-foreground text-sm text-center max-w-xs">
-              Mistral AI va analyser le CV et le convertir en format structuré Markdown
+              L'IA va analyser le CV et le convertir en format structuré Markdown
             </p>
           </div>
         )}

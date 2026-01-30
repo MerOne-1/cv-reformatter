@@ -6,10 +6,10 @@ import { Card, CardContent, CardHeader, CardTitle, AccentCard } from '@/componen
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { AgentSettingsCard } from '@/components/agent-settings-card';
-import { AgentEditDialog } from '@/components/agent-edit-dialog';
-import { AgentGraphEditor } from '@/components/agent-graph-editor';
-import { ThemeToggle } from '@/components/theme-toggle';
+import { AgentSettingsCard } from '@/components/features/agents/agent-settings-card';
+import { AgentEditDialog } from '@/components/features/agents/agent-edit-dialog';
+import { WorkflowEditor } from '@/components/features/agents/workflow-editor';
+import { ThemeToggle } from '@/components/layout/theme-toggle';
 import { AIAgent } from '@/lib/types';
 import {
   ArrowLeft,
@@ -35,6 +35,7 @@ interface Template {
   logoUrl: string | null; // Legacy - utilisez logoHeaderUrl/logoFooterUrl
   logoHeaderUrl: string | null;
   logoFooterUrl: string | null;
+  website: string | null;
   config: string;
   isActive: boolean;
 }
@@ -50,12 +51,17 @@ export default function SettingsPage() {
   const [editingAgent, setEditingAgent] = useState<AIAgent | null>(null);
   const [agentDialogOpen, setAgentDialogOpen] = useState(false);
   const [agentDialogMode, setAgentDialogMode] = useState<'edit' | 'create'>('edit');
+  const [uploadingLogoId, setUploadingLogoId] = useState<string | null>(null);
+
+  // Refs for file inputs
+  const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   // Form state
   const [formData, setFormData] = useState({
     displayName: '',
     primaryColor: '',
     secondaryColor: '',
+    website: '',
   });
 
   useEffect(() => {
@@ -151,6 +157,7 @@ export default function SettingsPage() {
       displayName: template.displayName,
       primaryColor: template.primaryColor,
       secondaryColor: template.secondaryColor,
+      website: template.website || '',
     });
   };
 
@@ -182,6 +189,65 @@ export default function SettingsPage() {
     } catch {
       return false;
     }
+  };
+
+  const handleLogoUpload = async (templateId: string, file: File) => {
+    setUploadingLogoId(templateId);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch(`/api/templates/${templateId}/logo`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        // Update template with new logo URL
+        setTemplates(prev =>
+          prev.map(t => t.id === templateId ? { ...t, logoUrl: data.data.url } : t)
+        );
+      } else {
+        console.error('Error uploading logo:', data.error);
+        alert(data.error || 'Erreur lors de l\'upload du logo');
+      }
+    } catch (error) {
+      console.error('Error uploading logo:', error);
+      alert('Erreur lors de l\'upload du logo');
+    } finally {
+      setUploadingLogoId(null);
+    }
+  };
+
+  const handleLogoDelete = async (templateId: string) => {
+    if (!confirm('Supprimer ce logo ?')) return;
+
+    setUploadingLogoId(templateId);
+    try {
+      const response = await fetch(`/api/templates/${templateId}/logo`, {
+        method: 'DELETE',
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setTemplates(prev =>
+          prev.map(t => t.id === templateId ? { ...t, logoUrl: null } : t)
+        );
+      } else {
+        console.error('Error deleting logo:', data.error);
+        alert(data.error || 'Erreur lors de la suppression du logo');
+      }
+    } catch (error) {
+      console.error('Error deleting logo:', error);
+      alert('Erreur lors de la suppression du logo');
+    } finally {
+      setUploadingLogoId(null);
+    }
+  };
+
+  const triggerFileInput = (templateId: string) => {
+    fileInputRefs.current[templateId]?.click();
   };
 
   return (
@@ -408,9 +474,45 @@ export default function SettingsPage() {
                               </div>
                             </div>
 
+                            {/* Website */}
+                            <div>
+                              <p className="text-sm font-medium mb-4 text-muted-foreground">Site web</p>
+                              {editingId === template.id ? (
+                                <input
+                                  type="text"
+                                  value={formData.website}
+                                  onChange={(e) =>
+                                    setFormData({ ...formData, website: e.target.value })
+                                  }
+                                  placeholder="www.example.com"
+                                  className="w-full px-3 py-2 bg-input border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring/50"
+                                />
+                              ) : (
+                                <p className="text-sm text-foreground">
+                                  {template.website || <span className="text-muted-foreground italic">Non défini</span>}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="mt-6">
                             {/* Logo */}
                             <div>
                               <p className="text-sm font-medium mb-4 text-muted-foreground">Logo</p>
+                              {/* Hidden file input */}
+                              <input
+                                type="file"
+                                ref={(el) => { fileInputRefs.current[template.id] = el; }}
+                                className="hidden"
+                                accept="image/png,image/jpeg,image/jpg,image/gif"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) {
+                                    handleLogoUpload(template.id, file);
+                                  }
+                                  e.target.value = ''; // Reset for re-upload
+                                }}
+                              />
                               {template.logoUrl ? (
                                 <div className="flex items-center gap-4">
                                   <div className="h-12 px-4 bg-card rounded-xl border border-border flex items-center">
@@ -420,13 +522,43 @@ export default function SettingsPage() {
                                       className="h-8 object-contain"
                                     />
                                   </div>
-                                  <Button variant="outline" size="sm">
-                                    Changer
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => triggerFileInput(template.id)}
+                                    disabled={uploadingLogoId === template.id}
+                                  >
+                                    {uploadingLogoId === template.id ? (
+                                      <Loader2 className="w-4 h-4 animate-spin" />
+                                    ) : (
+                                      <>
+                                        <Upload className="w-4 h-4 mr-2" />
+                                        Changer
+                                      </>
+                                    )}
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleLogoDelete(template.id)}
+                                    disabled={uploadingLogoId === template.id}
+                                    className="text-destructive hover:text-destructive"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
                                   </Button>
                                 </div>
                               ) : (
-                                <Button variant="outline" size="sm" disabled={editingId !== template.id}>
-                                  <Upload className="w-4 h-4 mr-2" />
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => triggerFileInput(template.id)}
+                                  disabled={uploadingLogoId === template.id}
+                                >
+                                  {uploadingLogoId === template.id ? (
+                                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                                  ) : (
+                                    <Upload className="w-4 h-4 mr-2" />
+                                  )}
                                   Ajouter un logo
                                 </Button>
                               )}
@@ -526,17 +658,7 @@ export default function SettingsPage() {
                 </div>
               </div>
 
-              <AgentGraphEditor onSave={fetchAgents} />
-
-              <div className="mt-8 p-4 rounded-xl bg-muted/50 border border-border">
-                <h3 className="font-medium mb-2">Comment utiliser</h3>
-                <ul className="text-sm text-muted-foreground space-y-1">
-                  <li>• Cliquez sur les fleches d&apos;un agent pour creer une connexion</li>
-                  <li>• Les agents sans entrees sont executes en premier (agents racines)</li>
-                  <li>• Un agent attend toutes ses entrees avant de s&apos;executer</li>
-                  <li>• Cliquez sur une connexion pour la supprimer</li>
-                </ul>
-              </div>
+              <WorkflowEditor onSave={fetchAgents} />
             </section>
           </TabsContent>
         </Tabs>
