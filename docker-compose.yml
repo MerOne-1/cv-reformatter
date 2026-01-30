@@ -4,11 +4,9 @@ services:
     container_name: cv-reformatter-db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: cv_reformatter
-    ports:
-      - "5434:5432"
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-cv_reformatter}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -16,6 +14,23 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - cv-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: cv-reformatter-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - cv-network
 
   app:
     build:
@@ -24,10 +39,19 @@ services:
     container_name: cv-reformatter-app
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "${APP_PORT:-3000}:3000"
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@db:5432/cv_reformatter?schema=public
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-cv_reformatter}?schema=public
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      # LLM Configuration
+      - LLM_API_KEY=${LLM_API_KEY}
+      - LLM_ENDPOINT=${LLM_ENDPOINT:-https://api.openai.com/v1/chat/completions}
+      - LLM_MODEL=${LLM_MODEL:-gpt-4o}
+      - LLM_MAX_TOKENS=${LLM_MAX_TOKENS:-8192}
+      # Backblaze B2
       - B2_ENDPOINT=${B2_ENDPOINT}
       - B2_REGION=${B2_REGION}
       - B2_ACCESS_KEY_ID=${B2_ACCESS_KEY_ID}
@@ -35,10 +59,51 @@ services:
       - B2_BUCKET_NAME=${B2_BUCKET_NAME}
       - B2_BUCKET_CV_RAW=${B2_BUCKET_CV_RAW}
       - B2_BUCKET_CV_FINAL=${B2_BUCKET_CV_FINAL}
-      - NEXT_PUBLIC_APP_URL=http://localhost:3000
+      # App
+      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - cv-network
+
+  worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.worker
+    container_name: cv-reformatter-worker
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-cv_reformatter}?schema=public
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - WORKER_CONCURRENCY=${WORKER_CONCURRENCY:-5}
+      # LLM Configuration
+      - LLM_API_KEY=${LLM_API_KEY}
+      - LLM_ENDPOINT=${LLM_ENDPOINT:-https://api.openai.com/v1/chat/completions}
+      - LLM_MODEL=${LLM_MODEL:-gpt-4o}
+      - LLM_MAX_TOKENS=${LLM_MAX_TOKENS:-8192}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - cv-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
 
 volumes:
   postgres_data:
+  redis_data:
+
+networks:
+  cv-network:
+    driver: bridge
