@@ -24,6 +24,7 @@ RUN adduser --system --uid 1001 worker
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/prisma ./prisma
 
+COPY package.json ./
 COPY lib ./lib
 COPY scripts/worker-entrypoint.ts ./scripts/worker-entrypoint.ts
 COPY tsconfig.json ./
