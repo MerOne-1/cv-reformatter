@@ -176,8 +176,7 @@ jobs:
             echo "Running Prisma schema sync..."
             docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T app npx prisma@6 db push --skip-generate
 
-            # Cleanup old images
-            docker image prune -f
+            # Note: Docker cleanup moved to healthcheck job (runs only after all containers are healthy)
 
   healthcheck:
     name: Verify Deployment
@@ -228,3 +227,10 @@ jobs:
 
             echo ""
             echo "=== All services healthy! ==="
+
+            # Cleanup old Docker resources (only runs if all containers are healthy)
+            echo ""
+            echo "=== Cleaning up old Docker resources ==="
+            docker image prune -af --filter "until=24h"
+            docker builder prune -af --filter "until=24h"
+            echo "✓ Cleanup complete"
