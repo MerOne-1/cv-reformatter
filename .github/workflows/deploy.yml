@@ -24,7 +24,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        uses: actions/checkout@v4
 
       - name: Set lowercase image prefix
         id: vars
@@ -32,10 +32,10 @@ jobs:
           echo "image_prefix=$(echo '${{ github.repository_owner }}/cv-reformatter' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@f95db51fddba0c2d1ec667646a06c2ce06100226 # v3.0.0
+        uses: docker/setup-buildx-action@v3
 
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d # v3.0.0
+        uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -43,7 +43,7 @@ jobs:
 
       - name: Extract metadata for App
         id: meta-app
-        uses: docker/metadata-action@8e5442c4ef9f78752691e2d8f8d19755c6f78e81 # v5.5.1
+        uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ steps.vars.outputs.image_prefix }}-app
           tags: |
@@ -52,7 +52,7 @@ jobs:
 
       - name: Extract metadata for Worker
         id: meta-worker
-        uses: docker/metadata-action@8e5442c4ef9f78752691e2d8f8d19755c6f78e81 # v5.5.1
+        uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ steps.vars.outputs.image_prefix }}-worker
           tags: |
@@ -60,26 +60,26 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push App image
-        uses: docker/build-push-action@4a13e500e55cf31b7a5d59a38ab2040ab0f42f56 # v6.0.0
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
           push: true
           tags: ${{ steps.meta-app.outputs.tags }}
           labels: ${{ steps.meta-app.outputs.labels }}
-          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ steps.vars.outputs.image_prefix }}-app:buildcache
-          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ steps.vars.outputs.image_prefix }}-app:buildcache,mode=max
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Build and push Worker image
-        uses: docker/build-push-action@4a13e500e55cf31b7a5d59a38ab2040ab0f42f56 # v6.0.0
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./docker/Dockerfile.worker
           push: true
           tags: ${{ steps.meta-worker.outputs.tags }}
           labels: ${{ steps.meta-worker.outputs.labels }}
-          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ steps.vars.outputs.image_prefix }}-worker:buildcache
-          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ steps.vars.outputs.image_prefix }}-worker:buildcache,mode=max
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   deploy:
     name: Deploy to VM
@@ -92,10 +92,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        uses: actions/checkout@v4
 
       - name: Copy docker-compose files to server
-        uses: appleboy/scp-action@917f8b81dfc1ccd331fef9e2d61bdc6c8be94571 # v0.1.7
+        uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USERNAME }}
@@ -104,7 +104,7 @@ jobs:
           target: ${{ secrets.DEPLOY_PATH }}
 
       - name: Deploy via SSH
-        uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262 # v1.0.3
+        uses: appleboy/ssh-action@v1.0.3
         env:
           REGISTRY: ${{ env.REGISTRY }}
           IMAGE_PREFIX: ${{ needs.build-and-push.outputs.image_prefix }}
@@ -136,12 +136,6 @@ jobs:
           envs: REGISTRY,IMAGE_PREFIX,GH_TOKEN,GH_ACTOR,DEPLOY_PATH,POSTGRES_USER,POSTGRES_PASSWORD,POSTGRES_DB,REDIS_PASSWORD,LLM_API_KEY,LLM_ENDPOINT,LLM_MODEL,LLM_MAX_TOKENS,B2_ENDPOINT,B2_REGION,B2_ACCESS_KEY_ID,B2_SECRET_ACCESS_KEY,B2_BUCKET_NAME,B2_BUCKET_CV_RAW,B2_BUCKET_CV_FINAL,NEXT_PUBLIC_APP_URL,APP_PORT,WORKER_CONCURRENCY
           script: |
             set -e
-
-            # Validate DEPLOY_PATH - must be absolute path without special characters
-            if [[ ! "$DEPLOY_PATH" =~ ^/[a-zA-Z0-9/_-]+$ ]]; then
-              echo "ERROR: Invalid DEPLOY_PATH format"
-              exit 1
-            fi
 
             cd "$DEPLOY_PATH"
 
@@ -188,7 +182,7 @@ jobs:
 
     steps:
       - name: Check services health
-        uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262 # v1.0.3
+        uses: appleboy/ssh-action@v1.0.3
         env:
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
         with:
@@ -197,12 +191,6 @@ jobs:
           key: ${{ secrets.DEPLOY_KEY }}
           envs: DEPLOY_PATH
           script: |
-            # Validate DEPLOY_PATH
-            if [[ ! "$DEPLOY_PATH" =~ ^/[a-zA-Z0-9/_-]+$ ]]; then
-              echo "ERROR: Invalid DEPLOY_PATH format"
-              exit 1
-            fi
-
             cd "$DEPLOY_PATH"
 
             echo "=== Container Status ==="
