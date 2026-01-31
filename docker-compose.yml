@@ -1,3 +1,6 @@
+# NOTE: Default values are for LOCAL DEVELOPMENT ONLY
+# For production, all credentials MUST be set via environment variables or secrets
+
 services:
   db:
     image: postgres:16-alpine
@@ -21,7 +24,10 @@ services:
     image: redis:7-alpine
     container_name: cv-reformatter-redis
     restart: unless-stopped
-    command: redis-server --appendonly yes
+    command: >
+      redis-server
+      --appendonly yes
+      ${REDIS_PASSWORD:+--requirepass ${REDIS_PASSWORD}}
     volumes:
       - redis_data:/data
     healthcheck:
@@ -61,6 +67,12 @@ services:
       - B2_BUCKET_CV_FINAL=${B2_BUCKET_CV_FINAL}
       # App
       - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     depends_on:
       db:
         condition: service_healthy

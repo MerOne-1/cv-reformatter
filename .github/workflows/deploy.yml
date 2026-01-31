@@ -1,0 +1,231 @@
+name: Build, Push & Deploy
+
+on:
+  push:
+    branches:
+      - main
+      - master
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ${{ github.repository_owner }}/cv-reformatter
+
+jobs:
+  build-and-push:
+    name: Build & Push Images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    outputs:
+      app_image: ${{ steps.meta-app.outputs.tags }}
+      worker_image: ${{ steps.meta-worker.outputs.tags }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f95db51fddba0c2d1ec667646a06c2ce06100226 # v3.0.0
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d # v3.0.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for App
+        id: meta-app
+        uses: docker/metadata-action@8e5442c4ef9f78752691e2d8f8d19755c6f78e81 # v5.5.1
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-app
+          tags: |
+            type=sha,prefix=
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Extract metadata for Worker
+        id: meta-worker
+        uses: docker/metadata-action@8e5442c4ef9f78752691e2d8f8d19755c6f78e81 # v5.5.1
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-worker
+          tags: |
+            type=sha,prefix=
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push App image
+        uses: docker/build-push-action@4a13e500e55cf31b7a5d59a38ab2040ab0f42f56 # v6.0.0
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta-app.outputs.tags }}
+          labels: ${{ steps.meta-app.outputs.labels }}
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-app:buildcache
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-app:buildcache,mode=max
+
+      - name: Build and push Worker image
+        uses: docker/build-push-action@4a13e500e55cf31b7a5d59a38ab2040ab0f42f56 # v6.0.0
+        with:
+          context: .
+          file: ./docker/Dockerfile.worker
+          push: true
+          tags: ${{ steps.meta-worker.outputs.tags }}
+          labels: ${{ steps.meta-worker.outputs.labels }}
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-worker:buildcache
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-worker:buildcache,mode=max
+
+  deploy:
+    name: Deploy to VM
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+
+      - name: Copy docker-compose files to server
+        uses: appleboy/scp-action@917f8b81dfc1ccd331fef9e2d61bdc6c8be94571 # v0.1.7
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USERNAME }}
+          key: ${{ secrets.DEPLOY_KEY }}
+          source: "docker-compose.yml,docker-compose.prod.yml"
+          target: ${{ secrets.DEPLOY_PATH }}
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262 # v1.0.3
+        env:
+          REGISTRY: ${{ env.REGISTRY }}
+          IMAGE_PREFIX: ${{ env.IMAGE_PREFIX }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_ACTOR: ${{ github.actor }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+          REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          LLM_ENDPOINT: ${{ secrets.LLM_ENDPOINT }}
+          LLM_MODEL: ${{ secrets.LLM_MODEL }}
+          LLM_MAX_TOKENS: ${{ secrets.LLM_MAX_TOKENS }}
+          B2_ENDPOINT: ${{ secrets.B2_ENDPOINT }}
+          B2_REGION: ${{ secrets.B2_REGION }}
+          B2_ACCESS_KEY_ID: ${{ secrets.B2_ACCESS_KEY_ID }}
+          B2_SECRET_ACCESS_KEY: ${{ secrets.B2_SECRET_ACCESS_KEY }}
+          B2_BUCKET_NAME: ${{ secrets.B2_BUCKET_NAME }}
+          B2_BUCKET_CV_RAW: ${{ secrets.B2_BUCKET_CV_RAW }}
+          B2_BUCKET_CV_FINAL: ${{ secrets.B2_BUCKET_CV_FINAL }}
+          NEXT_PUBLIC_APP_URL: ${{ secrets.NEXT_PUBLIC_APP_URL }}
+          APP_PORT: ${{ secrets.APP_PORT }}
+          WORKER_CONCURRENCY: ${{ secrets.WORKER_CONCURRENCY }}
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USERNAME }}
+          key: ${{ secrets.DEPLOY_KEY }}
+          envs: REGISTRY,IMAGE_PREFIX,GH_TOKEN,GH_ACTOR,DEPLOY_PATH,POSTGRES_USER,POSTGRES_PASSWORD,POSTGRES_DB,REDIS_PASSWORD,LLM_API_KEY,LLM_ENDPOINT,LLM_MODEL,LLM_MAX_TOKENS,B2_ENDPOINT,B2_REGION,B2_ACCESS_KEY_ID,B2_SECRET_ACCESS_KEY,B2_BUCKET_NAME,B2_BUCKET_CV_RAW,B2_BUCKET_CV_FINAL,NEXT_PUBLIC_APP_URL,APP_PORT,WORKER_CONCURRENCY
+          script: |
+            set -e
+
+            # Validate DEPLOY_PATH - must be absolute path without special characters
+            if [[ ! "$DEPLOY_PATH" =~ ^/[a-zA-Z0-9/_-]+$ ]]; then
+              echo "ERROR: Invalid DEPLOY_PATH format"
+              exit 1
+            fi
+
+            cd "$DEPLOY_PATH"
+
+            # Login to GHCR
+            echo "$GH_TOKEN" | docker login ghcr.io -u "$GH_ACTOR" --password-stdin
+
+            # Export environment variables for docker-compose
+            export REGISTRY="$REGISTRY"
+            export IMAGE_PREFIX="$IMAGE_PREFIX"
+            export POSTGRES_USER="$POSTGRES_USER"
+            export POSTGRES_PASSWORD="$POSTGRES_PASSWORD"
+            export POSTGRES_DB="$POSTGRES_DB"
+            export REDIS_PASSWORD="$REDIS_PASSWORD"
+            export LLM_API_KEY="$LLM_API_KEY"
+            export LLM_ENDPOINT="$LLM_ENDPOINT"
+            export LLM_MODEL="$LLM_MODEL"
+            export LLM_MAX_TOKENS="$LLM_MAX_TOKENS"
+            export B2_ENDPOINT="$B2_ENDPOINT"
+            export B2_REGION="$B2_REGION"
+            export B2_ACCESS_KEY_ID="$B2_ACCESS_KEY_ID"
+            export B2_SECRET_ACCESS_KEY="$B2_SECRET_ACCESS_KEY"
+            export B2_BUCKET_NAME="$B2_BUCKET_NAME"
+            export B2_BUCKET_CV_RAW="$B2_BUCKET_CV_RAW"
+            export B2_BUCKET_CV_FINAL="$B2_BUCKET_CV_FINAL"
+            export NEXT_PUBLIC_APP_URL="$NEXT_PUBLIC_APP_URL"
+            export APP_PORT="${APP_PORT:-3000}"
+            export WORKER_CONCURRENCY="${WORKER_CONCURRENCY:-5}"
+
+            # Pull new images
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml pull
+
+            # Deploy with healthcheck wait
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --wait --wait-timeout 120
+
+            # Cleanup old images
+            docker image prune -f
+
+  healthcheck:
+    name: Verify Deployment
+    needs: deploy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check services health
+        uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262 # v1.0.3
+        env:
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USERNAME }}
+          key: ${{ secrets.DEPLOY_KEY }}
+          envs: DEPLOY_PATH
+          script: |
+            # Validate DEPLOY_PATH
+            if [[ ! "$DEPLOY_PATH" =~ ^/[a-zA-Z0-9/_-]+$ ]]; then
+              echo "ERROR: Invalid DEPLOY_PATH format"
+              exit 1
+            fi
+
+            cd "$DEPLOY_PATH"
+
+            echo "=== Container Status ==="
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
+
+            echo ""
+            echo "=== Health Status ==="
+
+            # Check each container's health
+            UNHEALTHY=0
+
+            for container in cv-reformatter-db cv-reformatter-redis cv-reformatter-app cv-reformatter-worker; do
+              STATUS=$(docker inspect --format='{{.State.Health.Status}}' $container 2>/dev/null || echo "no-healthcheck")
+
+              if [ "$STATUS" = "healthy" ] || [ "$STATUS" = "no-healthcheck" ]; then
+                echo "✓ $container: $STATUS"
+              else
+                echo "✗ $container: $STATUS"
+                UNHEALTHY=1
+              fi
+            done
+
+            if [ $UNHEALTHY -eq 1 ]; then
+              echo ""
+              echo "=== Logs from unhealthy containers ==="
+              docker compose -f docker-compose.yml -f docker-compose.prod.yml logs --tail=50
+              exit 1
+            fi
+
+            echo ""
+            echo "=== All services healthy! ==="

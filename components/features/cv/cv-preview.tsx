@@ -2,20 +2,34 @@
 
 import { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Brand } from '@/lib/types';
 import { Eye, FileText } from 'lucide-react';
+
+interface TemplateInfo {
+  displayName: string;
+  primaryColor: string;
+  secondaryColor: string;
+}
 
 interface CVPreviewProps {
   markdown: string;
-  brand: Brand;
+  templateName: string;
+  template?: TemplateInfo | null;
 }
 
-export function CVPreview({ markdown, brand }: CVPreviewProps) {
+export function CVPreview({ markdown, templateName, template }: CVPreviewProps) {
   const brandColors = useMemo(() => {
-    return brand === 'DREAMIT'
+    if (template) {
+      return {
+        primary: template.primaryColor,
+        secondary: template.secondaryColor,
+        name: template.displayName,
+      };
+    }
+    // Fallback for legacy templates
+    return templateName === 'DREAMIT'
       ? { primary: '#1E3A8A', secondary: '#3B82F6', name: 'DreamIT' }
       : { primary: '#7C3AED', secondary: '#A78BFA', name: 'Rupturae' };
-  }, [brand]);
+  }, [template, templateName]);
 
   const html = useMemo(() => {
     if (!markdown) return '';

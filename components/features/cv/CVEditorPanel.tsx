@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import { FileText, FileSearch, Sparkles, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { Brand, CVWithImprovements } from '@/lib/types';
+import { CVWithImprovements } from '@/lib/types';
 
 interface CVEditorPanelProps {
   cv: CVWithImprovements;
@@ -12,7 +12,7 @@ interface CVEditorPanelProps {
   onChange: (markdown: string) => void;
   viewMode: 'code' | 'formatted';
   showOriginal: boolean;
-  brand: Brand;
+  templateName: string;
   onExtract: () => void;
   extracting: boolean;
 }
@@ -23,7 +23,7 @@ export function CVEditorPanel({
   onChange,
   viewMode,
   showOriginal,
-  brand,
+  templateName,
   onExtract,
   extracting,
 }: CVEditorPanelProps) {
@@ -169,7 +169,7 @@ export function CVEditorPanel({
             <Button
               onClick={onExtract}
               disabled={extracting}
-              variant={brand === 'DREAMIT' ? 'dreamit' : 'rupturae'}
+              variant="default"
               size="lg"
             >
               {extracting ? (

@@ -11,14 +11,14 @@ import { z } from 'zod';
 
 const generateSchema = z.object({
   cvId: z.string(),
-  brand: z.enum(['DREAMIT', 'RUPTURAE']).optional(),
+  templateName: z.string().optional(),
   templateId: z.string().optional(),
 });
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { cvId, brand: requestedBrand, templateId } = generateSchema.parse(body);
+    const { cvId, templateName: requestedTemplateName, templateId } = generateSchema.parse(body);
 
     // Get CV from database
     const cv = await prisma.cV.findUnique({
@@ -41,9 +41,9 @@ export async function POST(request: NextRequest) {
 
     let docxBuffer: Buffer;
     let filename: string;
-    let brand = requestedBrand || cv.brand;
+    let templateNameToUse = requestedTemplateName || cv.templateName;
 
-    // Priority: templateId > brand > cv.brand
+    // Priority: templateId > templateName > cv.templateName
     if (templateId) {
       // Use specific template by ID
       const template = await getTemplateById(templateId);
@@ -56,23 +56,21 @@ export async function POST(request: NextRequest) {
 
       docxBuffer = await generateDocxWithTemplate(cv.markdownContent, template);
       filename = getOutputFilenameFromTemplate(cv.consultantName || 'Consultant', template);
-
-      // Update brand to match template name if it matches
-      if (template.name === 'DREAMIT' || template.name === 'RUPTURAE') {
-        brand = template.name as typeof brand;
-      }
+      templateNameToUse = template.name;
     } else {
-      // Use brand-based template lookup (backward compatible)
-      const template = await getTemplateByName(brand);
+      // Use templateName-based template lookup
+      const template = await getTemplateByName(templateNameToUse);
 
       if (template) {
         // Template found in database - use new generator
         docxBuffer = await generateDocxWithTemplate(cv.markdownContent, template);
         filename = getOutputFilenameFromTemplate(cv.consultantName || 'Consultant', template);
       } else {
-        // Fallback to legacy generator with hardcoded colors
-        docxBuffer = await generateDocx(cv.markdownContent, brand);
-        filename = getOutputFilename(cv.consultantName || 'Consultant', brand);
+        // Fallback to legacy generator with hardcoded colors (DREAMIT or RUPTURAE)
+        console.warn(`Template "${templateNameToUse}" not found in database, falling back to legacy generator`);
+        const legacyBrand = (templateNameToUse === 'RUPTURAE' ? 'RUPTURAE' : 'DREAMIT') as 'DREAMIT' | 'RUPTURAE';
+        docxBuffer = await generateDocx(cv.markdownContent, legacyBrand);
+        filename = getOutputFilename(cv.consultantName || 'Consultant', legacyBrand);
       }
     }
 
@@ -81,7 +79,7 @@ export async function POST(request: NextRequest) {
       where: { id: cvId },
       data: {
         status: 'GENERATED',
-        brand,
+        templateName: templateNameToUse,
         generatedAt: new Date(),
       },
     });

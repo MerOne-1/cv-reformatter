@@ -43,6 +43,57 @@ export function sanitizeFilename(filename: string): string {
     .replace(/^_|_$/g, '');
 }
 
+const VALID_EXTENSIONS = ['pdf', 'docx', 'doc'];
+
+export function generateRawFilename(consultantName: string, extension: string): string {
+  if (!extension || !VALID_EXTENSIONS.includes(extension.toLowerCase())) {
+    throw new Error(`Invalid file extension: "${extension}". Must be one of: ${VALID_EXTENSIONS.join(', ')}`);
+  }
+
+  const sanitized = consultantName
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9\s]/g, '_')
+    .replace(/\s+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_|_$/g, '');
+
+  if (!sanitized) {
+    throw new Error(`Invalid consultant name for filename generation: "${consultantName}" sanitized to empty string`);
+  }
+
+  return `${sanitized}.${extension}`;
+}
+
+/**
+ * Extracts initials from a name (e.g., "Jean Dupont" -> "JD")
+ * Returns fallback if name is empty or whitespace-only
+ */
+export function getInitials(name: string, fallback = 'XX'): string {
+  const initials = name
+    .split(/\s+/)
+    .filter(word => word.length > 0)
+    .map(word => word.charAt(0).toUpperCase())
+    .join('');
+
+  return initials || fallback;
+}
+
+/**
+ * Returns the MIME content type for a file extension
+ */
+export function getContentTypeForExtension(extension: string): string {
+  switch (extension.toLowerCase()) {
+    case 'pdf':
+      return 'application/pdf';
+    case 'docx':
+    case 'doc':
+      return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    default:
+      return 'application/octet-stream';
+  }
+}
+
 export function truncateText(text: string, maxLength: number): string {
   if (text.length <= maxLength) return text;
   return text.slice(0, maxLength - 3) + '...';

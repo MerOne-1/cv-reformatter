@@ -9,33 +9,15 @@ vi.mock('@/lib/db', () => ({
   },
 }));
 
-vi.mock('@/lib/prompts', () => ({
-  ENRICHISSEUR_SYSTEM_PROMPT: 'Static enrichisseur system prompt',
-  ENRICHISSEUR_USER_PROMPT: (markdown: string, context?: string) =>
-    `Static user prompt: ${markdown}${context ? ` - ${context}` : ''}`,
-  ADAPTATEUR_SYSTEM_PROMPT: 'Static adaptateur system prompt',
-  ADAPTATEUR_USER_PROMPT: (markdown: string, context: string) =>
-    `Static adaptateur: ${markdown} - ${context}`,
-  CONTEXTE_SYSTEM_PROMPT: 'Static contexte system prompt',
-  CONTEXTE_USER_PROMPT: (markdown: string, context?: string) =>
-    `Static contexte: ${markdown}`,
-  BIO_SYSTEM_PROMPT: 'Static bio system prompt',
-  BIO_USER_PROMPT: (markdown: string, tone?: string) =>
-    `Static bio: ${markdown}`,
-  EXTRACTION_SYSTEM_PROMPT: 'Static extraction system prompt',
-  EXTRACTION_USER_PROMPT: (rawText: string) =>
-    `Static extraction: ${rawText}`,
-}));
-
 import prisma from '@/lib/db';
-import { getAgentPrompts, getActiveAgents } from '@/lib/agents';
+import { getAgentPrompts, getActiveAgents, AgentNotFoundError, AgentInactiveError } from '@/lib/agents';
 
 describe('getAgentPrompts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('should load prompts from database when agent exists', async () => {
+  it('should load prompts from database when agent exists and is active', async () => {
     const mockAgent = {
       id: '1',
       name: 'enrichisseur',
@@ -70,16 +52,16 @@ describe('getAgentPrompts', () => {
     expect(result.user).not.toContain('Context:');
   });
 
-  it('should fallback to static prompts when agent not in DB', async () => {
+  it('should throw AgentNotFoundError when agent not in DB', async () => {
     (prisma.aIAgent.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(null);
 
-    const result = await getAgentPrompts('enrichisseur', 'Mon CV');
-
-    expect(result.system).toBe('Static enrichisseur system prompt');
-    expect(result.user).toContain('Static user prompt: Mon CV');
+    await expect(getAgentPrompts('enrichisseur', 'Mon CV')).rejects.toThrow(AgentNotFoundError);
+    await expect(getAgentPrompts('enrichisseur', 'Mon CV')).rejects.toThrow(
+      'Agent "enrichisseur" non trouvé en base de données'
+    );
   });
 
-  it('should fallback to static prompts when agent is inactive', async () => {
+  it('should throw AgentInactiveError when agent is inactive', async () => {
     const mockAgent = {
       id: '1',
       name: 'enrichisseur',
@@ -90,27 +72,18 @@ describe('getAgentPrompts', () => {
 
     (prisma.aIAgent.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(mockAgent);
 
-    const result = await getAgentPrompts('enrichisseur', 'Mon CV');
-
-    expect(result.system).toBe('Static enrichisseur system prompt');
+    await expect(getAgentPrompts('enrichisseur', 'Mon CV')).rejects.toThrow(AgentInactiveError);
+    await expect(getAgentPrompts('enrichisseur', 'Mon CV')).rejects.toThrow(
+      'Agent "enrichisseur" est désactivé'
+    );
   });
 
-  it('should fallback to static prompts on database error', async () => {
+  it('should propagate database errors', async () => {
     (prisma.aIAgent.findUnique as ReturnType<typeof vi.fn>).mockRejectedValue(
       new Error('DB connection failed')
     );
 
-    const result = await getAgentPrompts('enrichisseur', 'Mon CV');
-
-    expect(result.system).toBe('Static enrichisseur system prompt');
-  });
-
-  it('should throw error for unknown agent type', async () => {
-    (prisma.aIAgent.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(null);
-
-    await expect(getAgentPrompts('unknown-agent', 'Mon CV')).rejects.toThrow(
-      'Unknown agent type: unknown-agent'
-    );
+    await expect(getAgentPrompts('enrichisseur', 'Mon CV')).rejects.toThrow('DB connection failed');
   });
 });
 

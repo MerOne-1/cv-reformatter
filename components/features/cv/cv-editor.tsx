@@ -5,11 +5,11 @@ import dynamic from 'next/dynamic';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { BrandSelector } from '@/components/layout/brand-selector';
+import { TemplateSelector } from '@/components/layout/template-selector';
 import { MissingInfoAlert } from '@/components/layout/missing-info-alert';
 import { AgentButtons } from '@/components/features/agents/agent-buttons';
 import { WorkflowSteps } from '@/components/features/workflow/workflow-steps';
-import { CVWithImprovements, CVStatus, Brand } from '@/lib/types';
+import { CVWithImprovements, CVStatus } from '@/lib/types';
 import {
   Save,
   FileSearch,
@@ -63,7 +63,7 @@ interface CVEditorProps {
 
 export function CVEditor({ cv, onUpdate }: CVEditorProps) {
   const [markdown, setMarkdown] = useState(cv.markdownContent || '');
-  const [brand, setBrand] = useState<Brand>(cv.brand);
+  const [templateName, setTemplateName] = useState(cv.templateName);
   const [missingFields, setMissingFields] = useState<string[]>(cv.missingFields);
   const [saving, setSaving] = useState(false);
   const [extracting, setExtracting] = useState(false);
@@ -74,7 +74,7 @@ export function CVEditor({ cv, onUpdate }: CVEditorProps) {
 
   useEffect(() => {
     setMarkdown(cv.markdownContent || '');
-    setBrand(cv.brand);
+    setTemplateName(cv.templateName);
     setMissingFields(cv.missingFields);
   }, [cv]);
 
@@ -86,7 +86,7 @@ export function CVEditor({ cv, onUpdate }: CVEditorProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           markdownContent: markdown,
-          brand,
+          templateName,
           status: 'EDITING' as CVStatus,
         }),
       });
@@ -144,7 +144,7 @@ export function CVEditor({ cv, onUpdate }: CVEditorProps) {
       const response = await fetch('/api/cv/generate-docx', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cvId: cv.id, brand }),
+        body: JSON.stringify({ cvId: cv.id, templateName }),
       });
 
       if (!response.ok) {
@@ -179,7 +179,7 @@ export function CVEditor({ cv, onUpdate }: CVEditorProps) {
       const response = await fetch('/api/cv/upload-final', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cvId: cv.id, brand }),
+        body: JSON.stringify({ cvId: cv.id, templateName }),
       });
 
       const data = await response.json();
@@ -221,7 +221,7 @@ export function CVEditor({ cv, onUpdate }: CVEditorProps) {
               </p>
             )}
           </div>
-          <BrandSelector value={brand} onChange={setBrand} />
+          <TemplateSelector value={templateName} onChange={setTemplateName} />
         </div>
 
         {/* Workflow steps */}
@@ -296,7 +296,7 @@ export function CVEditor({ cv, onUpdate }: CVEditorProps) {
               </Button>
 
               <Button
-                variant={brand === 'DREAMIT' ? 'dreamit' : 'rupturae'}
+                variant="default"
                 onClick={handleUploadFinal}
                 disabled={uploading}
               >

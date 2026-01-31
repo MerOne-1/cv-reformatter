@@ -2,7 +2,6 @@ import {
   CV,
   Improvement,
   CVStatus,
-  Brand,
   AIAgent,
   AgentConnection,
   WorkflowExecution,
@@ -15,7 +14,6 @@ export type {
   CV,
   Improvement,
   CVStatus,
-  Brand,
   AIAgent,
   AgentConnection,
   WorkflowExecution,
@@ -23,6 +21,9 @@ export type {
   ExecutionStatus,
   StepStatus,
 };
+
+// Type pour le nom de template (remplace l'ancien enum Brand)
+export type TemplateName = string;
 
 export interface CVWithImprovements extends CV {
   improvements: Improvement[];
@@ -34,7 +35,7 @@ export interface CVListItem {
   consultantName: string | null;
   title: string | null;
   status: CVStatus;
-  brand: Brand;
+  templateName: string;
   createdAt: Date;
   updatedAt: Date;
   hasMissingFields: boolean;
@@ -140,7 +141,7 @@ export interface ImprovementResult {
 
 export interface GenerateDocxRequest {
   cvId: string;
-  brand: Brand;
+  templateName: string;
 }
 
 export interface B2File {

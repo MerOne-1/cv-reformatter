@@ -6,7 +6,7 @@ import { z } from 'zod';
 
 const updateSchema = z.object({
   markdownContent: z.string().optional(),
-  brand: z.enum(['DREAMIT', 'RUPTURAE']).optional(),
+  templateName: z.string().optional(),
   status: z
     .enum(['PENDING', 'EXTRACTED', 'EDITING', 'IMPROVED', 'GENERATED', 'COMPLETED'])
     .optional(),

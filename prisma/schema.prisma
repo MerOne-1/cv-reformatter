@@ -16,11 +16,6 @@ enum CVStatus {
   COMPLETED
 }
 
-enum Brand {
-  DREAMIT
-  RUPTURAE
-}
-
 enum ExecutionStatus {
   PENDING
   RUNNING
@@ -58,7 +53,7 @@ model CV {
 
   // Status tracking
   status          CVStatus  @default(PENDING)
-  brand           Brand     @default(DREAMIT)
+  templateName    String    @default("DREAMIT")
 
   // Generated file
   generatedKey    String?   // B2 key for generated DOCX

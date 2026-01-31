@@ -187,7 +187,7 @@ export function CVList({ onSelectCV, selectedId, onRefresh, onDelete, compact }:
               const isSelected = selectedId === cv.id;
               const isCompleted = cv.status === 'COMPLETED';
               const isDeleting = deletingId === cv.id;
-              const brandColor = cv.brand === 'DREAMIT' ? 'dreamit' : 'rupturae';
+              const brandColor = cv.templateName === 'DREAMIT' ? 'dreamit' : 'rupturae';
 
               return (
                 <div
@@ -207,7 +207,7 @@ export function CVList({ onSelectCV, selectedId, onRefresh, onDelete, compact }:
                     className={cn(
                       'absolute left-0 top-0 bottom-0 w-1 transition-opacity duration-200',
                       isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-50',
-                      cv.brand === 'DREAMIT'
+                      cv.templateName === 'DREAMIT'
                         ? 'bg-gradient-to-b from-dreamit to-dreamit-glow'
                         : 'bg-gradient-to-b from-rupturae to-rupturae-glow'
                     )}
@@ -219,7 +219,7 @@ export function CVList({ onSelectCV, selectedId, onRefresh, onDelete, compact }:
                       <div className={cn(
                         'flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center transition-colors',
                         isSelected
-                          ? cv.brand === 'DREAMIT'
+                          ? cv.templateName === 'DREAMIT'
                             ? 'bg-dreamit/20 text-dreamit'
                             : 'bg-rupturae/20 text-rupturae'
                           : 'bg-secondary text-muted-foreground'
@@ -253,7 +253,7 @@ export function CVList({ onSelectCV, selectedId, onRefresh, onDelete, compact }:
                             <span className={cn(
                               'w-1.5 h-1.5 rounded-full',
                               isSelected
-                                ? cv.brand === 'DREAMIT' ? 'bg-dreamit' : 'bg-rupturae'
+                                ? cv.templateName === 'DREAMIT' ? 'bg-dreamit' : 'bg-rupturae'
                                 : status.dotColor,
                               isCompleted && 'ring-2 ring-success/20'
                             )} />

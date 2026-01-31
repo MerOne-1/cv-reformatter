@@ -8,6 +8,9 @@ import {
   sanitizeFilename,
   truncateText,
   extractConsultantNameFromFilename,
+  generateRawFilename,
+  getInitials,
+  getContentTypeForExtension,
 } from '@/lib/utils';
 
 describe('cn', () => {
@@ -100,5 +103,101 @@ describe('extractConsultantNameFromFilename', () => {
 
   it('should handle simple names', () => {
     expect(extractConsultantNameFromFilename('Pierre_Martin.pdf')).toBe('Pierre Martin');
+  });
+});
+
+describe('generateRawFilename', () => {
+  it('should generate filename with full name', () => {
+    expect(generateRawFilename('Jean Dupont', 'pdf')).toBe('Jean_Dupont.pdf');
+  });
+
+  it('should sanitize accented characters', () => {
+    expect(generateRawFilename('José García', 'docx')).toBe('Jose_Garcia.docx');
+  });
+
+  it('should handle multiple spaces', () => {
+    expect(generateRawFilename('Jean  Pierre  Dupont', 'pdf')).toBe('Jean_Pierre_Dupont.pdf');
+  });
+
+  it('should remove special characters and trim underscores', () => {
+    expect(generateRawFilename('Jean-Pierre Dupont (Jr)', 'pdf')).toBe('Jean_Pierre_Dupont_Jr.pdf');
+  });
+
+  it('should throw error for empty name', () => {
+    expect(() => generateRawFilename('', 'pdf')).toThrow('Invalid consultant name');
+  });
+
+  it('should throw error for whitespace-only name', () => {
+    expect(() => generateRawFilename('   ', 'pdf')).toThrow('Invalid consultant name');
+  });
+
+  it('should throw error for special-chars-only name', () => {
+    expect(() => generateRawFilename('###', 'pdf')).toThrow('Invalid consultant name');
+  });
+
+  it('should throw error for empty extension', () => {
+    expect(() => generateRawFilename('Jean Dupont', '')).toThrow('Invalid file extension');
+  });
+
+  it('should throw error for invalid extension', () => {
+    expect(() => generateRawFilename('Jean Dupont', 'exe')).toThrow('Invalid file extension');
+  });
+
+  it('should accept valid extensions (pdf, docx, doc)', () => {
+    expect(generateRawFilename('Jean Dupont', 'pdf')).toBe('Jean_Dupont.pdf');
+    expect(generateRawFilename('Jean Dupont', 'docx')).toBe('Jean_Dupont.docx');
+    expect(generateRawFilename('Jean Dupont', 'doc')).toBe('Jean_Dupont.doc');
+  });
+});
+
+describe('getInitials', () => {
+  it('should extract initials from full name', () => {
+    expect(getInitials('Jean Dupont')).toBe('JD');
+  });
+
+  it('should handle single name', () => {
+    expect(getInitials('Madonna')).toBe('M');
+  });
+
+  it('should handle multiple names', () => {
+    expect(getInitials('Jean Pierre Marie Dupont')).toBe('JPMD');
+  });
+
+  it('should return fallback for empty name', () => {
+    expect(getInitials('')).toBe('XX');
+  });
+
+  it('should return fallback for whitespace-only name', () => {
+    expect(getInitials('   ')).toBe('XX');
+  });
+
+  it('should use custom fallback', () => {
+    expect(getInitials('', 'NA')).toBe('NA');
+  });
+
+  it('should handle names with multiple spaces', () => {
+    expect(getInitials('Jean   Pierre')).toBe('JP');
+  });
+});
+
+describe('getContentTypeForExtension', () => {
+  it('should return correct MIME type for pdf', () => {
+    expect(getContentTypeForExtension('pdf')).toBe('application/pdf');
+  });
+
+  it('should return correct MIME type for docx', () => {
+    expect(getContentTypeForExtension('docx')).toBe('application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+  });
+
+  it('should return correct MIME type for doc', () => {
+    expect(getContentTypeForExtension('doc')).toBe('application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+  });
+
+  it('should handle uppercase extensions', () => {
+    expect(getContentTypeForExtension('PDF')).toBe('application/pdf');
+  });
+
+  it('should return octet-stream for unknown extensions', () => {
+    expect(getContentTypeForExtension('xyz')).toBe('application/octet-stream');
   });
 });

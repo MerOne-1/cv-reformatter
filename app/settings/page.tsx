@@ -10,6 +10,7 @@ import { AgentSettingsCard } from '@/components/features/agents/agent-settings-c
 import { AgentEditDialog } from '@/components/features/agents/agent-edit-dialog';
 import { WorkflowEditor } from '@/components/features/agents/workflow-editor';
 import { ThemeToggle } from '@/components/layout/theme-toggle';
+import { TemplateCreateModal } from '@/components/features/templates/template-create-modal';
 import { AIAgent } from '@/lib/types';
 import {
   ArrowLeft,
@@ -52,6 +53,8 @@ export default function SettingsPage() {
   const [agentDialogOpen, setAgentDialogOpen] = useState(false);
   const [agentDialogMode, setAgentDialogMode] = useState<'edit' | 'create'>('edit');
   const [uploadingLogoId, setUploadingLogoId] = useState<string | null>(null);
+  const [templateModalOpen, setTemplateModalOpen] = useState(false);
+  const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null);
 
   // Refs for file inputs
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
@@ -250,6 +253,31 @@ export default function SettingsPage() {
     fileInputRefs.current[templateId]?.click();
   };
 
+  const handleDeleteTemplate = async (template: Template) => {
+    if (!confirm(`Supprimer le template "${template.displayName}" ? Cette action est irréversible.`)) {
+      return;
+    }
+
+    setDeletingTemplateId(template.id);
+    try {
+      const response = await fetch(`/api/templates/${template.id}`, {
+        method: 'DELETE',
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setTemplates(prev => prev.filter(t => t.id !== template.id));
+      } else {
+        alert(data.error || 'Erreur lors de la suppression');
+      }
+    } catch (error) {
+      console.error('Error deleting template:', error);
+      alert('Erreur lors de la suppression du template');
+    } finally {
+      setDeletingTemplateId(null);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -320,7 +348,7 @@ export default function SettingsPage() {
                     </p>
                   </div>
                 </div>
-                <Button variant="outline" disabled className="gap-2">
+                <Button variant="outline" className="gap-2" onClick={() => setTemplateModalOpen(true)}>
                   <Plus className="w-4 h-4" />
                   Nouveau template
                 </Button>
@@ -407,14 +435,29 @@ export default function SettingsPage() {
                                   </Button>
                                 </>
                               ) : (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleEdit(template)}
-                                >
-                                  <Settings className="w-4 h-4 mr-2" />
-                                  Modifier
-                                </Button>
+                                <>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleEdit(template)}
+                                  >
+                                    <Settings className="w-4 h-4 mr-2" />
+                                    Modifier
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleDeleteTemplate(template)}
+                                    disabled={deletingTemplateId === template.id}
+                                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                  >
+                                    {deletingTemplateId === template.id ? (
+                                      <Loader2 className="w-4 h-4 animate-spin" />
+                                    ) : (
+                                      <Trash2 className="w-4 h-4" />
+                                    )}
+                                  </Button>
+                                </>
                               )}
                             </div>
                           </div>
@@ -670,6 +713,12 @@ export default function SettingsPage() {
           onSave={handleSaveAgent}
           onCreate={handleCreateAgentSave}
           mode={agentDialogMode}
+        />
+
+        <TemplateCreateModal
+          isOpen={templateModalOpen}
+          onClose={() => setTemplateModalOpen(false)}
+          onCreated={fetchTemplates}
         />
       </main>
     </div>

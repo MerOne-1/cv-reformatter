@@ -9,7 +9,6 @@ import {
   Footer,
   Packer,
 } from 'docx';
-import { Brand } from '@prisma/client';
 import {
   TemplateWithParsedConfig,
   parseTemplateConfig,
@@ -18,8 +17,12 @@ import { loadLogoFromUrl, getTemplateByName } from '../templates/template-utils'
 import { parseMarkdown } from './parser';
 import { formatText, getColorsFromTemplate } from './formatter';
 import { buildHeader, buildFooter, buildContent } from './builder';
+import { getInitials } from '../utils';
 
-const BRAND_COLORS: Record<Brand, { primary: string; secondary: string; text: string; muted: string }> = {
+// Legacy brand type for backward compatibility
+type LegacyBrand = 'DREAMIT' | 'RUPTURAE';
+
+const BRAND_COLORS: Record<LegacyBrand, { primary: string; secondary: string; text: string; muted: string }> = {
   DREAMIT: { primary: '0C4A6E', secondary: '0EA5E9', text: '1F2937', muted: '6B7280' },
   RUPTURAE: { primary: '7C3AED', secondary: 'A78BFA', text: '1F2937', muted: '6B7280' },
 };
@@ -39,10 +42,7 @@ export async function generateDocxWithTemplate(
   }
 
   // Extract initials from consultant name (e.g., "Jean Dupont" -> "JD")
-  const initials = consultantName
-    .split(/\s+/)
-    .map(word => word.charAt(0).toUpperCase())
-    .join('');
+  const initials = getInitials(consultantName);
 
   // Use logoUrl as the main logo (for both header and footer if needed)
   // Fall back to logoHeaderUrl/logoFooterUrl for backward compatibility
@@ -109,7 +109,7 @@ export async function generateDocxByTemplateId(
   return generateDocxWithTemplate(markdown, template);
 }
 
-export async function generateDocx(markdown: string, brand: Brand): Promise<Buffer> {
+export async function generateDocx(markdown: string, brand: LegacyBrand): Promise<Buffer> {
   const template = await getTemplateByName(brand);
 
   if (template) {
@@ -295,29 +295,17 @@ export async function generateDocx(markdown: string, brand: Brand): Promise<Buff
   return Buffer.from(await Packer.toBuffer(doc));
 }
 
-export function getOutputFilename(consultantName: string, brand: Brand): string {
-  const sanitized = consultantName
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-zA-Z0-9]/g, '_')
-    .replace(/_+/g, '_')
-    .trim();
-
+export function getOutputFilename(consultantName: string, brand: LegacyBrand): string {
+  const initials = getInitials(consultantName);
   const brandPrefix = brand === 'DREAMIT' ? 'DreamIT' : 'Rupturae';
   const date = new Date().toISOString().slice(0, 10);
 
-  return `CV_${brandPrefix}_${sanitized}_${date}.docx`;
+  return `CV_${brandPrefix}_${initials}_${date}.docx`;
 }
 
 export function getOutputFilenameFromTemplate(consultantName: string, template: TemplateWithParsedConfig): string {
-  const sanitized = consultantName
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-zA-Z0-9]/g, '_')
-    .replace(/_+/g, '_')
-    .trim();
-
+  const initials = getInitials(consultantName);
   const date = new Date().toISOString().slice(0, 10);
 
-  return `CV_${template.displayName}_${sanitized}_${date}.docx`;
+  return `CV_${template.displayName}_${initials}_${date}.docx`;
 }

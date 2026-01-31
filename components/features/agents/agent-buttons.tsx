@@ -11,8 +11,28 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { AGENT_DESCRIPTIONS, AgentType } from '@/lib/prompts';
 import { Sparkles, Target, BookOpen, User, Loader2 } from 'lucide-react';
+
+export type AgentType = 'enrichisseur' | 'adaptateur' | 'contexte' | 'bio';
+
+const AGENT_DESCRIPTIONS: Record<AgentType, { name: string; description: string }> = {
+  enrichisseur: {
+    name: 'Enrichisseur',
+    description: 'Améliore les descriptions et valorise les compétences',
+  },
+  adaptateur: {
+    name: 'Adaptateur',
+    description: 'Réorganise le CV pour une mission spécifique',
+  },
+  contexte: {
+    name: 'Contextualisateur',
+    description: 'Ajoute du contexte métier aux expériences',
+  },
+  bio: {
+    name: 'Bio Writer',
+    description: 'Crée ou améliore le résumé professionnel',
+  },
+};
 
 interface AgentButtonsProps {
   cvId: string;

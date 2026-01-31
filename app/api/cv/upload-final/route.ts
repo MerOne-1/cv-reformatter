@@ -1,18 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
-import { generateDocx, getOutputFilename } from '@/lib/docx-generator';
+import { generateDocx, generateDocxWithTemplate, getOutputFilename, getOutputFilenameFromTemplate } from '@/lib/docx-generator';
 import { uploadFinalCV } from '@/lib/b2';
+import { getTemplateByName } from '@/lib/templates/template-utils';
 import { z } from 'zod';
 
 const uploadSchema = z.object({
   cvId: z.string(),
-  brand: z.enum(['DREAMIT', 'RUPTURAE']).optional(),
+  templateName: z.string().optional(),
 });
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { cvId, brand: requestedBrand } = uploadSchema.parse(body);
+    const { cvId, templateName: requestedTemplateName } = uploadSchema.parse(body);
 
     // Get CV from database
     const cv = await prisma.cV.findUnique({
@@ -33,16 +34,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const brand = requestedBrand || cv.brand;
+    const templateNameToUse = requestedTemplateName || cv.templateName;
 
-    // Generate DOCX
-    const docxBuffer = await generateDocx(cv.markdownContent, brand);
+    // Try to get template from database
+    const template = await getTemplateByName(templateNameToUse);
 
-    // Generate filename
-    const filename = getOutputFilename(
-      cv.consultantName || 'Consultant',
-      brand
-    );
+    let docxBuffer: Buffer;
+    let filename: string;
+
+    if (template) {
+      // Use template-based generator
+      docxBuffer = await generateDocxWithTemplate(cv.markdownContent, template);
+      filename = getOutputFilenameFromTemplate(cv.consultantName || 'Consultant', template);
+    } else {
+      // Fallback to legacy generator
+      console.warn(`Template "${templateNameToUse}" not found in database, falling back to legacy generator`);
+      const legacyBrand = (templateNameToUse === 'RUPTURAE' ? 'RUPTURAE' : 'DREAMIT') as 'DREAMIT' | 'RUPTURAE';
+      docxBuffer = await generateDocx(cv.markdownContent, legacyBrand);
+      filename = getOutputFilename(cv.consultantName || 'Consultant', legacyBrand);
+    }
 
     // Upload to B2
     const { key, url } = await uploadFinalCV(filename, docxBuffer);
@@ -52,7 +62,7 @@ export async function POST(request: NextRequest) {
       where: { id: cvId },
       data: {
         status: 'COMPLETED',
-        brand,
+        templateName: templateNameToUse,
         generatedKey: key,
         generatedUrl: url,
         generatedAt: new Date(),

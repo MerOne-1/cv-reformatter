@@ -1,7 +1,6 @@
 'use client';
 
-import { useMemo, useState, useEffect, useCallback } from 'react';
-import { Brand } from '@/lib/types';
+import { useMemo, useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { X, Columns, Eye, Sparkles, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -30,11 +29,20 @@ function PDFLoadingState() {
   );
 }
 
+interface TemplateInfo {
+  id: string;
+  name: string;
+  displayName: string;
+  primaryColor: string;
+  secondaryColor: string;
+}
+
 interface CVPreviewModalProps {
   open: boolean;
   onClose: () => void;
   markdown: string;
-  brand: Brand;
+  templateName: string;
+  template?: TemplateInfo | null;
   originalCvId?: string;
   originalFilename?: string;
   logoUrl?: string | null;
@@ -129,7 +137,8 @@ export function CVPreviewModal({
   open,
   onClose,
   markdown,
-  brand,
+  templateName,
+  template,
   originalCvId,
   originalFilename,
   logoUrl,
@@ -144,10 +153,18 @@ export function CVPreviewModal({
   }, []);
 
   const brandColors = useMemo(() => {
-    return brand === 'DREAMIT'
+    if (template) {
+      return {
+        primary: template.primaryColor,
+        secondary: template.secondaryColor,
+        name: template.displayName,
+      };
+    }
+    // Fallback for legacy templates
+    return templateName === 'DREAMIT'
       ? { primary: '#0C4A6E', secondary: '#0EA5E9', name: 'DreamIT' }
       : { primary: '#7C3AED', secondary: '#A78BFA', name: 'Rupturae' };
-  }, [brand]);
+  }, [template, templateName]);
 
   if (!open) return null;
 
@@ -166,10 +183,12 @@ export function CVPreviewModal({
         {/* Header */}
         <div className="flex-shrink-0 h-16 border-b border-border flex items-center justify-between px-5 bg-background-elevated">
           <div className="flex items-center gap-4">
-            <div className={cn(
-              'w-10 h-10 rounded-xl flex items-center justify-center',
-              brand === 'DREAMIT' ? 'gradient-dreamit' : 'gradient-rupturae'
-            )}>
+            <div
+              className="w-10 h-10 rounded-xl flex items-center justify-center"
+              style={{
+                background: `linear-gradient(135deg, ${brandColors.primary}, ${brandColors.secondary})`,
+              }}
+            >
               <Eye className="w-5 h-5 text-white" />
             </div>
             <div>

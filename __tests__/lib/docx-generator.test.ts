@@ -14,19 +14,29 @@ vi.mock('@/lib/templates/template-utils', () => ({
 }));
 
 describe('getOutputFilename', () => {
-  it('should generate correct filename for DreamIT', () => {
+  it('should generate correct filename with initials for DreamIT', () => {
     const filename = getOutputFilename('Jean Dupont', 'DREAMIT');
-    expect(filename).toMatch(/^CV_DreamIT_Jean_Dupont_\d{4}-\d{2}-\d{2}\.docx$/);
+    expect(filename).toMatch(/^CV_DreamIT_JD_\d{4}-\d{2}-\d{2}\.docx$/);
   });
 
-  it('should generate correct filename for Rupturae', () => {
+  it('should generate correct filename with initials for Rupturae', () => {
     const filename = getOutputFilename('Marie Martin', 'RUPTURAE');
-    expect(filename).toMatch(/^CV_Rupturae_Marie_Martin_\d{4}-\d{2}-\d{2}\.docx$/);
+    expect(filename).toMatch(/^CV_Rupturae_MM_\d{4}-\d{2}-\d{2}\.docx$/);
   });
 
-  it('should sanitize special characters in name', () => {
+  it('should handle names with accents in initials', () => {
     const filename = getOutputFilename('José García', 'DREAMIT');
-    expect(filename).toMatch(/^CV_DreamIT_Jose_Garcia_\d{4}-\d{2}-\d{2}\.docx$/);
+    expect(filename).toMatch(/^CV_DreamIT_JG_\d{4}-\d{2}-\d{2}\.docx$/);
+  });
+
+  it('should use fallback XX for empty name', () => {
+    const filename = getOutputFilename('', 'DREAMIT');
+    expect(filename).toMatch(/^CV_DreamIT_XX_\d{4}-\d{2}-\d{2}\.docx$/);
+  });
+
+  it('should use fallback XX for whitespace-only name', () => {
+    const filename = getOutputFilename('   ', 'RUPTURAE');
+    expect(filename).toMatch(/^CV_Rupturae_XX_\d{4}-\d{2}-\d{2}\.docx$/);
   });
 });
 
@@ -213,17 +223,17 @@ describe('getOutputFilenameFromTemplate', () => {
     updatedAt: new Date(),
   });
 
-  it('should generate filename with template display name', () => {
+  it('should generate filename with template display name and initials', () => {
     const template = createMockTemplate();
     const filename = getOutputFilenameFromTemplate('Jean Dupont', template);
 
-    expect(filename).toMatch(/^CV_Custom Template_Jean_Dupont_\d{4}-\d{2}-\d{2}\.docx$/);
+    expect(filename).toMatch(/^CV_Custom Template_JD_\d{4}-\d{2}-\d{2}\.docx$/);
   });
 
-  it('should sanitize consultant name', () => {
+  it('should use initials from consultant name', () => {
     const template = createMockTemplate();
     const filename = getOutputFilenameFromTemplate('José García', template);
 
-    expect(filename).toMatch(/^CV_Custom Template_Jose_Garcia_\d{4}-\d{2}-\d{2}\.docx$/);
+    expect(filename).toMatch(/^CV_Custom Template_JG_\d{4}-\d{2}-\d{2}\.docx$/);
   });
 });

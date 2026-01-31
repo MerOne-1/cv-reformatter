@@ -116,6 +116,33 @@ export async function deleteFile(key: string): Promise<void> {
   await s3Client.send(command);
 }
 
+/**
+ * Renames a file by copying to new key and deleting the old one.
+ * Returns the new URL and any deletion error that occurred.
+ * Deletion failures are logged but do not throw - the rename is considered
+ * successful if the new file was created.
+ */
+export async function renameFile(
+  oldKey: string,
+  newKey: string,
+  contentType: string
+): Promise<{ url: string; deleteError?: Error }> {
+  const buffer = await downloadFile(oldKey);
+  const url = await uploadFile(newKey, buffer, contentType);
+  try {
+    await deleteFile(oldKey);
+    return { url };
+  } catch (deleteError) {
+    const error = deleteError instanceof Error ? deleteError : new Error(String(deleteError));
+    console.error('File renamed but old file could not be deleted:', {
+      oldKey,
+      newKey,
+      error: error.message,
+    });
+    return { url, deleteError: error };
+  }
+}
+
 export function getRawCVKey(filename: string): string {
   return `${CV_RAW_PREFIX}/${filename}`;
 }

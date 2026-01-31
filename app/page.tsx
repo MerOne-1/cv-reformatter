@@ -6,15 +6,20 @@ import { CVHeader } from '@/components/features/cv/CVHeader';
 import { CVSidebar } from '@/components/features/cv/CVSidebar';
 import { CVToolbar } from '@/components/features/cv/CVToolbar';
 import { CVEditorPanel } from '@/components/features/cv/CVEditorPanel';
-import { CVListItem, CVWithImprovements, Brand } from '@/lib/types';
+import { CVListItem, CVWithImprovements } from '@/lib/types';
 import { useDebouncedSave } from '@/hooks';
 import { FileText, Loader2 } from 'lucide-react';
 
 interface Template {
   id: string;
   name: string;
+  displayName: string;
+  primaryColor: string;
+  secondaryColor: string;
   logoUrl: string | null;
+  logoHeaderUrl: string | null;
   website: string | null;
+  isActive: boolean;
 }
 
 export default function Home() {
@@ -22,7 +27,7 @@ export default function Home() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [markdown, setMarkdown] = useState('');
-  const [brand, setBrand] = useState<Brand>('DREAMIT');
+  const [templateName, setTemplateName] = useState('DREAMIT');
   const [previewOpen, setPreviewOpen] = useState(false);
   const [extracting, setExtracting] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -32,8 +37,8 @@ export default function Home() {
   const [viewMode, setViewMode] = useState<'code' | 'formatted'>('code');
   const [templates, setTemplates] = useState<Template[]>([]);
 
-  // Fetch templates on mount
-  useEffect(() => {
+  // Fetch templates
+  const fetchTemplates = useCallback(() => {
     fetch('/api/templates')
       .then(res => res.json())
       .then(data => {
@@ -44,26 +49,31 @@ export default function Home() {
       .catch(console.error);
   }, []);
 
-  // Get current template based on brand
+  // Fetch templates on mount
+  useEffect(() => {
+    fetchTemplates();
+  }, [fetchTemplates]);
+
+  // Get current template based on templateName
   const currentTemplate = useMemo(() => {
-    return templates.find(t => t.name === brand) || null;
-  }, [templates, brand]);
+    return templates.find(t => t.name === templateName) || null;
+  }, [templates, templateName]);
 
   useEffect(() => {
     if (selectedCV) {
       setMarkdown(selectedCV.markdownContent || '');
-      setBrand(selectedCV.brand);
+      setTemplateName(selectedCV.templateName);
     }
   }, [selectedCV]);
 
   // Auto-save callback - stable reference using selectedCV.id
   const handleAutoSave = useCallback(
-    async (data: { markdown: string; brand: Brand }) => {
+    async (data: { markdown: string; templateName: string }) => {
       if (!selectedCV) return;
       await fetch(`/api/cv/${selectedCV.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ markdownContent: data.markdown, brand: data.brand }),
+        body: JSON.stringify({ markdownContent: data.markdown, templateName: data.templateName }),
       });
     },
     [selectedCV]
@@ -71,8 +81,8 @@ export default function Home() {
 
   // Memoized save data to avoid unnecessary re-renders
   const saveData = useMemo(
-    () => ({ markdown, brand }),
-    [markdown, brand]
+    () => ({ markdown, templateName }),
+    [markdown, templateName]
   );
 
   // Auto-save with debounce - replaces inline useEffect
@@ -131,13 +141,13 @@ export default function Home() {
       await fetch(`/api/cv/${selectedCV.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ markdownContent: markdown, brand }),
+        body: JSON.stringify({ markdownContent: markdown, templateName }),
       });
 
       const response = await fetch('/api/cv/generate-docx', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cvId: selectedCV.id, brand }),
+        body: JSON.stringify({ cvId: selectedCV.id, templateName }),
       });
       if (response.ok) {
         const blob = await response.blob();
@@ -162,13 +172,13 @@ export default function Home() {
       await fetch(`/api/cv/${selectedCV.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ markdownContent: markdown, brand }),
+        body: JSON.stringify({ markdownContent: markdown, templateName }),
       });
 
       const response = await fetch('/api/cv/upload-final', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cvId: selectedCV.id, brand }),
+        body: JSON.stringify({ cvId: selectedCV.id, templateName }),
       });
       const data = await response.json();
       if (data.success) {
@@ -217,8 +227,8 @@ export default function Home() {
             <>
               <CVToolbar
                 cv={selectedCV}
-                brand={brand}
-                onBrandChange={setBrand}
+                templateName={templateName}
+                onTemplateChange={setTemplateName}
                 hasContent={hasContent}
                 viewMode={viewMode}
                 onViewModeChange={setViewMode}
@@ -238,7 +248,7 @@ export default function Home() {
                 onChange={setMarkdown}
                 viewMode={viewMode}
                 showOriginal={showOriginal}
-                brand={brand}
+                templateName={templateName}
                 onExtract={handleExtract}
                 extracting={extracting}
               />
@@ -263,13 +273,15 @@ export default function Home() {
         open={previewOpen}
         onClose={() => setPreviewOpen(false)}
         markdown={markdown}
-        brand={brand}
+        templateName={templateName}
+        template={currentTemplate}
         originalCvId={selectedCV?.id}
         originalFilename={selectedCV?.originalName}
-        logoUrl={currentTemplate?.logoUrl}
+        logoUrl={currentTemplate?.logoUrl || currentTemplate?.logoHeaderUrl}
         website={currentTemplate?.website}
         consultantName={selectedCV?.consultantName || ''}
       />
-    </div>
+
+      </div>
   );
 }

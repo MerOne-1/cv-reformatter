@@ -13,13 +13,13 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { BrandSelector } from '@/components/layout/brand-selector';
-import { Brand, CVWithImprovements } from '@/lib/types';
+import { TemplateSelector } from '@/components/layout/template-selector';
+import { CVWithImprovements } from '@/lib/types';
 
 interface CVToolbarProps {
   cv: CVWithImprovements;
-  brand: Brand;
-  onBrandChange: (brand: Brand) => void;
+  templateName: string;
+  onTemplateChange: (templateName: string) => void;
   hasContent: boolean;
   viewMode: 'code' | 'formatted';
   onViewModeChange: (mode: 'code' | 'formatted') => void;
@@ -36,8 +36,8 @@ interface CVToolbarProps {
 
 export function CVToolbar({
   cv,
-  brand,
-  onBrandChange,
+  templateName,
+  onTemplateChange,
   hasContent,
   viewMode,
   onViewModeChange,
@@ -55,16 +55,13 @@ export function CVToolbar({
     <div className="flex-shrink-0 h-14 border-b border-border flex items-center justify-between px-5 bg-background-elevated">
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-3">
-          <div className={cn(
-            'w-2 h-2 rounded-full',
-            brand === 'DREAMIT' ? 'bg-dreamit shadow-sm shadow-dreamit/50' : 'bg-rupturae shadow-sm shadow-rupturae/50'
-          )} />
+          <div className="w-2 h-2 rounded-full bg-primary shadow-sm shadow-primary/50" />
           <span className="font-medium text-sm truncate max-w-[280px]">
             {cv.consultantName || cv.originalName}
           </span>
         </div>
         <div className="h-5 w-px bg-border" />
-        <BrandSelector value={brand} onChange={onBrandChange} />
+        <TemplateSelector value={templateName} onChange={onTemplateChange} />
       </div>
 
       <div className="flex items-center gap-2">
@@ -73,7 +70,7 @@ export function CVToolbar({
             size="sm"
             onClick={onExtract}
             disabled={extracting}
-            variant={brand === 'DREAMIT' ? 'dreamit' : 'rupturae'}
+            variant="default"
           >
             {extracting ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -86,19 +83,21 @@ export function CVToolbar({
           <>
             <Button
               variant={showOriginal ? 'secondary' : 'outline'}
-              size="sm"
+              size="icon"
+              className="h-8 w-8"
               onClick={onToggleOriginal}
+              title={showOriginal ? 'Fermer l\'original' : 'Voir l\'original'}
             >
               {showOriginal ? (
                 <X className="w-4 h-4" />
               ) : (
                 <Columns className="w-4 h-4" />
               )}
-              {showOriginal ? 'Fermer' : 'Original'}
             </Button>
             <Button
               variant="outline"
-              size="sm"
+              size="icon"
+              className="h-8 w-8"
               onClick={onExtract}
               disabled={extracting}
               title="Régénérer l'extraction IA"
@@ -108,7 +107,6 @@ export function CVToolbar({
               ) : (
                 <RefreshCw className="w-4 h-4" />
               )}
-              Régénérer
             </Button>
             <Button
               variant={viewMode === 'formatted' ? 'secondary' : 'outline'}
@@ -148,7 +146,7 @@ export function CVToolbar({
               size="sm"
               onClick={onUploadFinal}
               disabled={uploading}
-              variant={brand === 'DREAMIT' ? 'dreamit' : 'rupturae'}
+              variant="default"
             >
               {uploading ? (
                 <Loader2 className="w-4 h-4 animate-spin" />

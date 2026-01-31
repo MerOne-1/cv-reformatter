@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
-import { downloadFile } from '@/lib/b2';
+import { downloadFile, renameFile, getRawCVKey } from '@/lib/b2';
 import { askLLM } from '@/lib/llm';
-import { EXTRACTION_SYSTEM_PROMPT, EXTRACTION_USER_PROMPT } from '@/lib/prompts/extraction';
+import { getAgentPrompts, AgentNotFoundError, AgentInactiveError } from '@/lib/agents';
 import { detectMissingFields } from '@/lib/types';
-import { getFileExtension, extractConsultantNameFromFilename } from '@/lib/utils';
+import { getFileExtension, extractConsultantNameFromFilename, generateRawFilename, getContentTypeForExtension } from '@/lib/utils';
 import { z } from 'zod';
 
 // Dynamic imports for file parsers
@@ -64,11 +64,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Get extraction prompts from database
+    const { system, user } = await getAgentPrompts('extraction', rawText);
+
     // Use LLM to structure the content
-    const markdownContent = await askLLM(
-      EXTRACTION_SYSTEM_PROMPT,
-      EXTRACTION_USER_PROMPT(rawText)
-    );
+    const markdownContent = await askLLM(system, user);
 
     // Detect missing fields
     const missingFields = detectMissingFields(markdownContent);
@@ -84,6 +84,34 @@ export async function POST(request: NextRequest) {
     );
     const title = titleMatch?.[1]?.trim() || null;
 
+    // Rename file in B2 with consultant full name
+    let newOriginalName = cv.originalName;
+    let newOriginalKey = cv.originalKey;
+    let renameWarning: string | null = null;
+    if (consultantName) {
+      try {
+        const baseFilename = generateRawFilename(consultantName, extension);
+        const timestamp = Date.now().toString(36);
+        const newFilename = baseFilename.replace(`.${extension}`, `_${timestamp}.${extension}`);
+        const newKey = getRawCVKey(newFilename);
+        const contentType = getContentTypeForExtension(extension);
+        const { deleteError } = await renameFile(cv.originalKey, newKey, contentType);
+        newOriginalName = newFilename;
+        newOriginalKey = newKey;
+        if (deleteError) {
+          renameWarning = 'Le fichier a été renommé mais l\'ancien fichier n\'a pas pu être supprimé.';
+        }
+      } catch (renameError) {
+        console.error('Failed to rename file in B2:', {
+          cvId,
+          originalKey: cv.originalKey,
+          consultantName,
+          error: renameError instanceof Error ? renameError.message : renameError,
+        });
+        renameWarning = 'Le fichier n\'a pas pu être renommé. Le nom original est conservé.';
+      }
+    }
+
     // Update CV in database
     const updatedCV = await prisma.cV.update({
       where: { id: cvId },
@@ -92,6 +120,8 @@ export async function POST(request: NextRequest) {
         consultantName,
         title,
         missingFields,
+        originalName: newOriginalName,
+        originalKey: newOriginalKey,
         status: 'EXTRACTED',
         extractedAt: new Date(),
       },
@@ -99,6 +129,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      warning: renameWarning,
       data: {
         id: updatedCV.id,
         markdownContent: updatedCV.markdownContent,
@@ -116,11 +147,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (error instanceof AgentNotFoundError || error instanceof AgentInactiveError) {
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: 503 }
+      );
+    }
+
     console.error('Error extracting CV:', error);
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to extract CV',
+        error: 'Une erreur est survenue lors de l\'extraction du CV. Veuillez réessayer.',
       },
       { status: 500 }
     );
