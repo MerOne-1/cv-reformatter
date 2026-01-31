@@ -172,9 +172,9 @@ jobs:
             # Deploy with healthcheck wait
             docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --wait --wait-timeout 120
 
-            # Run Prisma schema sync
+            # Run Prisma schema sync (using Prisma 6.x to match project version)
             echo "Running Prisma schema sync..."
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T app pnpm db:push
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T app npx prisma@6 db push --skip-generate
 
             # Cleanup old images
             docker image prune -f
