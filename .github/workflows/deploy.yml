@@ -174,7 +174,7 @@ jobs:
 
             # Run Prisma schema sync
             echo "Running Prisma schema sync..."
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T app npx prisma db push --skip-generate
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T app pnpm db:push
 
             # Cleanup old images
             docker image prune -f
