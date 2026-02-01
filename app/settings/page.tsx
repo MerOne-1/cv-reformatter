@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { Card, CardContent, CardHeader, CardTitle, AccentCard } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -11,20 +11,23 @@ import { AgentEditDialog } from '@/components/features/agents/agent-edit-dialog'
 import { WorkflowEditor } from '@/components/features/agents/workflow-editor';
 import { ThemeToggle } from '@/components/layout/theme-toggle';
 import { TemplateCreateModal } from '@/components/features/templates/template-create-modal';
+import { TemplateEditModal } from '@/components/features/templates/template-edit-modal';
 import { AIAgent } from '@/lib/types';
+import { cn } from '@/lib/utils';
 import {
   ArrowLeft,
   Palette,
   Plus,
   Settings,
   Upload,
-  Check,
   AlertTriangle,
   Loader2,
   Bot,
   Sparkles,
   GitBranch,
   Trash2,
+  Globe,
+  Pencil,
 } from 'lucide-react';
 
 interface Template {
@@ -46,7 +49,6 @@ export default function SettingsPage() {
   const [agents, setAgents] = useState<AIAgent[]>([]);
   const [loading, setLoading] = useState(true);
   const [agentsLoading, setAgentsLoading] = useState(true);
-  const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('templates');
   const [editingAgent, setEditingAgent] = useState<AIAgent | null>(null);
@@ -55,17 +57,10 @@ export default function SettingsPage() {
   const [uploadingLogoId, setUploadingLogoId] = useState<string | null>(null);
   const [templateModalOpen, setTemplateModalOpen] = useState(false);
   const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null);
+  const [editModalTemplate, setEditModalTemplate] = useState<Template | null>(null);
 
   // Refs for file inputs
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
-
-  // Form state
-  const [formData, setFormData] = useState({
-    displayName: '',
-    primaryColor: '',
-    secondaryColor: '',
-    website: '',
-  });
 
   useEffect(() => {
     fetchTemplates();
@@ -97,6 +92,31 @@ export default function SettingsPage() {
       console.error('Error fetching agents:', error);
     } finally {
       setAgentsLoading(false);
+    }
+  };
+
+  const handleEditTemplate = (template: Template) => {
+    setEditModalTemplate(template);
+  };
+
+  const handleSaveTemplate = async (templateId: string, updates: Partial<Template>) => {
+    try {
+      setSaving(true);
+      const response = await fetch(`/api/templates/${templateId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setTemplates(prev => prev.map(t => t.id === templateId ? data.data : t));
+        setEditModalTemplate(null);
+      }
+    } catch (error) {
+      console.error('Error saving template:', error);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -154,36 +174,6 @@ export default function SettingsPage() {
     setAgents(prev => prev.map(a => a.id === agent.id ? data.data : a));
   };
 
-  const handleEdit = (template: Template) => {
-    setEditingId(template.id);
-    setFormData({
-      displayName: template.displayName,
-      primaryColor: template.primaryColor,
-      secondaryColor: template.secondaryColor,
-      website: template.website || '',
-    });
-  };
-
-  const handleSave = async (id: string) => {
-    try {
-      setSaving(true);
-      const response = await fetch(`/api/templates/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
-      });
-
-      const data = await response.json();
-      if (data.success) {
-        setTemplates(prev => prev.map(t => t.id === id ? data.data : t));
-        setEditingId(null);
-      }
-    } catch (error) {
-      console.error('Error saving template:', error);
-    } finally {
-      setSaving(false);
-    }
-  };
 
   const isIncomplete = (template: Template) => {
     try {
@@ -362,268 +352,169 @@ export default function SettingsPage() {
                   </div>
                 </div>
               ) : (
-                <div className="grid gap-5">
+                <div className="grid gap-3 md:grid-cols-2">
                   {templates.map((template) => {
                     const isDreamit = template.name.toLowerCase().includes('dreamit');
+                    const incomplete = isIncomplete(template);
+
                     return (
-                      <AccentCard
+                      <Card
                         key={template.id}
-                        accentColor={isDreamit ? 'dreamit' : 'rupturae'}
-                        accentPosition="top"
-                        className="overflow-hidden"
+                        className={cn(
+                          'relative overflow-hidden transition-all duration-200 group',
+                          incomplete
+                            ? 'border-warning/30 hover:border-warning/50'
+                            : isDreamit
+                              ? 'border-dreamit/20 hover:border-dreamit/40'
+                              : 'border-rupturae/20 hover:border-rupturae/40'
+                        )}
                       >
-                        <CardHeader className="pb-4">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-4">
-                              <div
-                                className="w-14 h-14 rounded-2xl flex items-center justify-center text-white font-bold text-lg shadow-lg"
-                                style={{
-                                  background: `linear-gradient(135deg, ${template.primaryColor}, ${template.secondaryColor})`,
-                                  boxShadow: `0 8px 24px -8px ${template.primaryColor}40`,
-                                }}
-                              >
-                                {template.displayName.slice(0, 2).toUpperCase()}
-                              </div>
-                              <div>
-                                <CardTitle className="text-lg flex items-center gap-3">
-                                  {editingId === template.id ? (
-                                    <input
-                                      type="text"
-                                      value={formData.displayName}
-                                      onChange={(e) =>
-                                        setFormData({ ...formData, displayName: e.target.value })
-                                      }
-                                      className="px-3 py-1.5 bg-input border border-border rounded-lg text-lg font-display focus:outline-none focus:ring-2 focus:ring-ring/50"
-                                    />
-                                  ) : (
-                                    template.displayName
+                        {/* Accent bar */}
+                        <div
+                          className={cn(
+                            'absolute top-0 left-0 right-0 h-1 transition-opacity',
+                            incomplete
+                              ? 'bg-gradient-to-r from-warning to-warning/60'
+                              : isDreamit
+                                ? 'bg-gradient-to-r from-dreamit via-dreamit-glow to-dreamit'
+                                : 'bg-gradient-to-r from-rupturae via-rupturae-glow to-rupturae'
+                          )}
+                        />
+
+                        {/* Hidden file input */}
+                        <input
+                          type="file"
+                          ref={(el) => { fileInputRefs.current[template.id] = el; }}
+                          className="hidden"
+                          accept="image/png,image/jpeg,image/jpg,image/gif"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              handleLogoUpload(template.id, file);
+                            }
+                            e.target.value = '';
+                          }}
+                        />
+
+                        <CardHeader className="pb-3">
+                          <div className="flex items-start justify-between">
+                            <div className="flex items-center gap-3">
+                              {/* Logo ou initiales en fallback */}
+                              {template.logoUrl ? (
+                                <img
+                                  src={template.logoUrl}
+                                  alt={template.displayName}
+                                  className="h-10 max-w-[80px] object-contain flex-shrink-0"
+                                />
+                              ) : (
+                                <div
+                                  className="w-11 h-11 rounded-xl flex items-center justify-center text-white font-bold text-sm shadow-lg flex-shrink-0"
+                                  style={{
+                                    background: `linear-gradient(135deg, ${template.primaryColor}, ${template.secondaryColor})`,
+                                    boxShadow: `0 4px 12px -4px ${template.primaryColor}50`,
+                                  }}
+                                >
+                                  {template.displayName.slice(0, 2).toUpperCase()}
+                                </div>
+                              )}
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <CardTitle className="text-base font-sans font-semibold truncate">
+                                    {template.displayName}
+                                  </CardTitle>
+                                  {incomplete && (
+                                    <AlertTriangle className="w-4 h-4 text-warning flex-shrink-0" />
                                   )}
-                                  {isIncomplete(template) && (
-                                    <Badge variant="outline" className="text-warning border-warning/30 bg-warning/10">
-                                      <AlertTriangle className="w-3 h-3 mr-1" />
-                                      A configurer
-                                    </Badge>
-                                  )}
-                                </CardTitle>
-                                <p className="text-xs text-muted-foreground font-mono mt-1">
+                                </div>
+                                <p className="text-xs text-muted-foreground font-mono mt-0.5 truncate">
                                   {template.name}
                                 </p>
                               </div>
                             </div>
-                            <div className="flex items-center gap-2">
-                              {editingId === template.id ? (
-                                <>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => setEditingId(null)}
-                                  >
-                                    Annuler
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant={isDreamit ? 'dreamit' : 'rupturae'}
-                                    onClick={() => handleSave(template.id)}
-                                    disabled={saving}
-                                  >
-                                    {saving ? (
-                                      <Loader2 className="w-4 h-4 animate-spin" />
-                                    ) : (
-                                      <Check className="w-4 h-4" />
-                                    )}
-                                    Sauvegarder
-                                  </Button>
-                                </>
-                              ) : (
-                                <>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handleEdit(template)}
-                                  >
-                                    <Settings className="w-4 h-4 mr-2" />
-                                    Modifier
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => handleDeleteTemplate(template)}
-                                    disabled={deletingTemplateId === template.id}
-                                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                  >
-                                    {deletingTemplateId === template.id ? (
-                                      <Loader2 className="w-4 h-4 animate-spin" />
-                                    ) : (
-                                      <Trash2 className="w-4 h-4" />
-                                    )}
-                                  </Button>
-                                </>
-                              )}
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                                onClick={() => handleEditTemplate(template)}
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive hover:bg-destructive/10"
+                                onClick={() => handleDeleteTemplate(template)}
+                                disabled={deletingTemplateId === template.id}
+                              >
+                                {deletingTemplateId === template.id ? (
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                ) : (
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                )}
+                              </Button>
                             </div>
                           </div>
                         </CardHeader>
-                        <CardContent>
-                          <div className="grid grid-cols-2 gap-8">
-                            {/* Colors */}
-                            <div>
-                              <p className="text-sm font-medium mb-4 text-muted-foreground">Couleurs</p>
-                              <div className="flex gap-4">
-                                <div className="flex items-center gap-3">
-                                  {editingId === template.id ? (
-                                    <input
-                                      type="color"
-                                      value={formData.primaryColor}
-                                      onChange={(e) =>
-                                        setFormData({ ...formData, primaryColor: e.target.value })
-                                      }
-                                      className="w-10 h-10 rounded-xl cursor-pointer border-2 border-border"
-                                    />
-                                  ) : (
-                                    <div
-                                      className="w-10 h-10 rounded-xl border-2 border-border shadow-inner"
-                                      style={{ backgroundColor: template.primaryColor }}
-                                    />
-                                  )}
-                                  <div>
-                                    <p className="text-xs text-muted-foreground">Primaire</p>
-                                    <p className="text-xs font-mono text-foreground">
-                                      {editingId === template.id ? formData.primaryColor : template.primaryColor}
-                                    </p>
-                                  </div>
-                                </div>
-                                <div className="flex items-center gap-3">
-                                  {editingId === template.id ? (
-                                    <input
-                                      type="color"
-                                      value={formData.secondaryColor}
-                                      onChange={(e) =>
-                                        setFormData({ ...formData, secondaryColor: e.target.value })
-                                      }
-                                      className="w-10 h-10 rounded-xl cursor-pointer border-2 border-border"
-                                    />
-                                  ) : (
-                                    <div
-                                      className="w-10 h-10 rounded-xl border-2 border-border shadow-inner"
-                                      style={{ backgroundColor: template.secondaryColor }}
-                                    />
-                                  )}
-                                  <div>
-                                    <p className="text-xs text-muted-foreground">Secondaire</p>
-                                    <p className="text-xs font-mono text-foreground">
-                                      {editingId === template.id ? formData.secondaryColor : template.secondaryColor}
-                                    </p>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
 
-                            {/* Website */}
-                            <div>
-                              <p className="text-sm font-medium mb-4 text-muted-foreground">Site web</p>
-                              {editingId === template.id ? (
-                                <input
-                                  type="text"
-                                  value={formData.website}
-                                  onChange={(e) =>
-                                    setFormData({ ...formData, website: e.target.value })
-                                  }
-                                  placeholder="www.example.com"
-                                  className="w-full px-3 py-2 bg-input border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring/50"
+                        <CardContent className="space-y-4">
+                          {/* Infos compactes */}
+                          <div className="flex items-center gap-4 flex-wrap">
+                            {/* Couleurs */}
+                            <div className="flex items-center gap-2">
+                              <div className="flex -space-x-1">
+                                <div
+                                  className="w-5 h-5 rounded-full border-2 border-card"
+                                  style={{ backgroundColor: template.primaryColor }}
+                                  title={`Primaire: ${template.primaryColor}`}
                                 />
-                              ) : (
-                                <p className="text-sm text-foreground">
-                                  {template.website || <span className="text-muted-foreground italic">Non défini</span>}
-                                </p>
-                              )}
-                            </div>
-                          </div>
-
-                          <div className="mt-6">
-                            {/* Logo */}
-                            <div>
-                              <p className="text-sm font-medium mb-4 text-muted-foreground">Logo</p>
-                              {/* Hidden file input */}
-                              <input
-                                type="file"
-                                ref={(el) => { fileInputRefs.current[template.id] = el; }}
-                                className="hidden"
-                                accept="image/png,image/jpeg,image/jpg,image/gif"
-                                onChange={(e) => {
-                                  const file = e.target.files?.[0];
-                                  if (file) {
-                                    handleLogoUpload(template.id, file);
-                                  }
-                                  e.target.value = ''; // Reset for re-upload
-                                }}
-                              />
-                              {template.logoUrl ? (
-                                <div className="flex items-center gap-4">
-                                  <div className="h-12 px-4 bg-card rounded-xl border border-border flex items-center">
-                                    <img
-                                      src={template.logoUrl}
-                                      alt={template.displayName}
-                                      className="h-8 object-contain"
-                                    />
-                                  </div>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => triggerFileInput(template.id)}
-                                    disabled={uploadingLogoId === template.id}
-                                  >
-                                    {uploadingLogoId === template.id ? (
-                                      <Loader2 className="w-4 h-4 animate-spin" />
-                                    ) : (
-                                      <>
-                                        <Upload className="w-4 h-4 mr-2" />
-                                        Changer
-                                      </>
-                                    )}
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => handleLogoDelete(template.id)}
-                                    disabled={uploadingLogoId === template.id}
-                                    className="text-destructive hover:text-destructive"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </Button>
-                                </div>
-                              ) : (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => triggerFileInput(template.id)}
-                                  disabled={uploadingLogoId === template.id}
-                                >
-                                  {uploadingLogoId === template.id ? (
-                                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                                  ) : (
-                                    <Upload className="w-4 h-4 mr-2" />
-                                  )}
-                                  Ajouter un logo
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-
-                          {isIncomplete(template) && (
-                            <div className="mt-6 p-4 rounded-xl bg-warning/10 border border-warning/20">
-                              <div className="flex items-start gap-3">
-                                <AlertTriangle className="w-5 h-5 text-warning flex-shrink-0 mt-0.5" />
-                                <div>
-                                  <p className="text-sm font-medium text-warning">Configuration incomplete</p>
-                                  <p className="text-xs text-warning/80 mt-1">
-                                    Ce template necessite une configuration complete pour etre utilise.
-                                    Uploadez le template PDF/DOCX de reference pour configurer la mise en page.
-                                  </p>
-                                </div>
+                                <div
+                                  className="w-5 h-5 rounded-full border-2 border-card"
+                                  style={{ backgroundColor: template.secondaryColor }}
+                                  title={`Secondaire: ${template.secondaryColor}`}
+                                />
                               </div>
+                              <span className="text-xs text-muted-foreground">Couleurs</span>
+                            </div>
+
+                            {/* Site web */}
+                            {template.website && (
+                              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                <Globe className="w-3.5 h-3.5" />
+                                <span className="truncate max-w-[120px]">{template.website}</span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Upload logo */}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => triggerFileInput(template.id)}
+                            disabled={uploadingLogoId === template.id}
+                            className="w-full"
+                          >
+                            {uploadingLogoId === template.id ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <>
+                                <Upload className="w-3.5 h-3.5" />
+                                {template.logoUrl ? 'Changer le logo' : 'Ajouter un logo'}
+                              </>
+                            )}
+                          </Button>
+
+                          {/* Warning si incomplet */}
+                          {incomplete && (
+                            <div className="flex items-center gap-2 p-2 rounded-lg bg-warning/10 border border-warning/20">
+                              <AlertTriangle className="w-4 h-4 text-warning flex-shrink-0" />
+                              <p className="text-[11px] text-warning/90 leading-tight">
+                                Configuration requise avant utilisation
+                              </p>
                             </div>
                           )}
                         </CardContent>
-                      </AccentCard>
+                      </Card>
                     );
                   })}
                 </div>
@@ -719,6 +610,13 @@ export default function SettingsPage() {
           isOpen={templateModalOpen}
           onClose={() => setTemplateModalOpen(false)}
           onCreated={fetchTemplates}
+        />
+
+        <TemplateEditModal
+          template={editModalTemplate}
+          onClose={() => setEditModalTemplate(null)}
+          onSave={handleSaveTemplate}
+          saving={saving}
         />
       </main>
     </div>

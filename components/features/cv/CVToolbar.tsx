@@ -4,14 +4,12 @@ import {
   Eye,
   Download,
   Upload,
-  FileSearch,
   Loader2,
   Columns,
   X,
   Code2,
   RefreshCw,
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { TemplateSelector } from '@/components/layout/template-selector';
 import { CVWithImprovements } from '@/lib/types';
@@ -65,21 +63,7 @@ export function CVToolbar({
       </div>
 
       <div className="flex items-center gap-2">
-        {!hasContent ? (
-          <Button
-            size="sm"
-            onClick={onExtract}
-            disabled={extracting}
-            variant="default"
-          >
-            {extracting ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <FileSearch className="w-4 h-4" />
-            )}
-            Extraire le contenu
-          </Button>
-        ) : (
+        {hasContent && (
           <>
             <Button
               variant={showOriginal ? 'secondary' : 'outline'}

@@ -169,8 +169,9 @@ export function CVEditorPanel({
             <Button
               onClick={onExtract}
               disabled={extracting}
-              variant="default"
+              variant="dreamit"
               size="lg"
+              className="shadow-lg shadow-dreamit/20"
             >
               {extracting ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
