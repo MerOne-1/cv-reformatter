@@ -23,7 +23,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm build
 
 # Compile seed script for production
-RUN npx esbuild prisma/seed.ts --bundle --platform=node --outfile=prisma/seed.js --external:@prisma/client
+RUN pnpm add -D esbuild && pnpm exec esbuild prisma/seed.ts --bundle --platform=node --outfile=prisma/seed.js --external:@prisma/client
 
 # ---- Runner ----
 FROM base AS runner
