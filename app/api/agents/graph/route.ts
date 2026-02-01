@@ -13,6 +13,8 @@ export async function GET() {
           displayName: true,
           isActive: true,
           order: true,
+          positionX: true,
+          positionY: true,
         },
       }),
       prisma.agentConnection.findMany({
@@ -56,6 +58,8 @@ export async function GET() {
       level: levels.get(agent.id) || 0,
       inputs: incomingEdges.get(agent.id) || [],
       outputs: outgoingEdges.get(agent.id) || [],
+      positionX: agent.positionX,
+      positionY: agent.positionY,
     }));
 
     const edges = connections.map(conn => ({

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   ReactFlow,
   Node,
@@ -17,6 +17,7 @@ import {
   Panel,
   Handle,
   Position,
+  NodeChange,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { Button } from '@/components/ui/button';
@@ -31,8 +32,11 @@ import {
   Bot,
   Zap,
   CheckCircle2,
+  Save,
+  Cloud,
+  CloudOff,
 } from 'lucide-react';
-import type { AgentGraph } from '@/lib/types';
+import type { AgentGraph, NodePositionUpdate, AgentGraphNode } from '@/lib/types';
 
 interface WorkflowEditorProps {
   onSave?: () => void;
@@ -46,7 +50,15 @@ const nodeColors: Record<string, string> = {
   adaptateur: '#10b981',
 };
 
-function AgentNodeComponent({ data }: { data: any }) {
+interface AgentNodeData extends AgentGraphNode {
+  // AgentGraphNode already has all the fields we need
+}
+
+const AgentNodeComponent = React.memo(function AgentNodeComponent({
+  data,
+}: {
+  data: AgentNodeData;
+}) {
   const color = nodeColors[data.name] || '#6b7280';
 
   return (
@@ -100,7 +112,7 @@ function AgentNodeComponent({ data }: { data: any }) {
       </div>
     </div>
   );
-}
+});
 
 const nodeTypes = {
   agent: AgentNodeComponent,
@@ -111,8 +123,15 @@ export function WorkflowEditor({ onSave }: WorkflowEditorProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
+  const [nodes, setNodes, onNodesChangeBase] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+
+  // Position autosave state
+  const [savingPositions, setSavingPositions] = useState(false);
+  const [positionsSaved, setPositionsSaved] = useState(true);
+  const [lastSavedPositions, setLastSavedPositions] = useState<Date | null>(null);
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const pendingPositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
 
   const fetchGraph = useCallback(async () => {
     try {
@@ -152,13 +171,16 @@ export function WorkflowEditor({ onSave }: WorkflowEditorProps) {
       const startY = -totalHeight / 2;
 
       nodesAtLevel.forEach((node, idx) => {
+        // Use saved positions if available, otherwise calculate from level
+        const hasPosition = node.positionX !== null && node.positionY !== null;
+        const position = hasPosition
+          ? { x: node.positionX!, y: node.positionY! }
+          : { x: level * xGap, y: startY + idx * yGap };
+
         flowNodes.push({
           id: node.id,
           type: 'agent',
-          position: {
-            x: level * xGap,
-            y: startY + idx * yGap,
-          },
+          position,
           data: {
             ...node,
           },
@@ -185,6 +207,101 @@ export function WorkflowEditor({ onSave }: WorkflowEditorProps) {
     setNodes(flowNodes);
     setEdges(flowEdges);
   }, [setNodes, setEdges]);
+
+  // State for save errors
+  const [positionSaveError, setPositionSaveError] = useState<string | null>(null);
+
+  // Save positions to database
+  const savePositions = useCallback(async () => {
+    if (pendingPositionsRef.current.size === 0) return;
+
+    const positions: NodePositionUpdate[] = Array.from(
+      pendingPositionsRef.current.entries()
+    ).map(([agentId, pos]) => ({
+      agentId,
+      x: pos.x,
+      y: pos.y,
+    }));
+
+    try {
+      setSavingPositions(true);
+      setPositionSaveError(null);
+      const response = await fetch('/api/agents/positions', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ positions }),
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        pendingPositionsRef.current.clear();
+        setLastSavedPositions(new Date());
+        setPositionsSaved(true);
+      } else {
+        setPositionSaveError(data.error || 'Erreur de sauvegarde');
+      }
+    } catch (err) {
+      console.error('Failed to save positions:', err);
+      setPositionSaveError('Erreur de connexion');
+    } finally {
+      setSavingPositions(false);
+    }
+  }, []);
+
+  // Handle node changes with position tracking
+  const onNodesChange = useCallback(
+    (changes: NodeChange<Node>[]) => {
+      onNodesChangeBase(changes);
+
+      // Track position changes for autosave
+      const positionChanges = changes.filter(
+        (change): change is NodeChange<Node> & { type: 'position'; position?: { x: number; y: number }; dragging?: boolean } =>
+          change.type === 'position' && 'position' in change && change.position !== undefined
+      );
+
+      if (positionChanges.length > 0) {
+        positionChanges.forEach((change) => {
+          if (change.position) {
+            pendingPositionsRef.current.set(change.id, change.position);
+          }
+        });
+
+        setPositionsSaved(false);
+
+        // Debounce save - only save when dragging stops
+        const isDragging = positionChanges.some((c) => c.dragging);
+        if (!isDragging) {
+          if (saveTimeoutRef.current) {
+            clearTimeout(saveTimeoutRef.current);
+          }
+          saveTimeoutRef.current = setTimeout(() => {
+            savePositions();
+          }, 500);
+        }
+      }
+    },
+    [onNodesChangeBase, savePositions]
+  );
+
+  // Cleanup timeout on unmount and save pending positions
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+      // Save pending positions before unmount (fire and forget)
+      if (pendingPositionsRef.current.size > 0) {
+        const positions = Array.from(pendingPositionsRef.current.entries()).map(
+          ([agentId, pos]) => ({ agentId, x: pos.x, y: pos.y })
+        );
+        // Use sendBeacon for reliable unmount save
+        navigator.sendBeacon(
+          '/api/agents/positions',
+          JSON.stringify({ positions })
+        );
+      }
+    };
+  }, []);
 
   useEffect(() => {
     fetchGraph();
@@ -277,6 +394,29 @@ export function WorkflowEditor({ onSave }: WorkflowEditorProps) {
           )}
         </div>
         <div className="flex items-center gap-2">
+          {savingPositions ? (
+            <Badge variant="outline" className="text-blue-600 border-blue-300 bg-blue-50">
+              <Cloud className="h-3 w-3 mr-1 animate-pulse" />
+              Sauvegarde...
+            </Badge>
+          ) : positionSaveError ? (
+            <Badge variant="destructive" title={positionSaveError}>
+              <AlertCircle className="h-3 w-3 mr-1" />
+              Erreur
+            </Badge>
+          ) : positionsSaved ? (
+            lastSavedPositions && (
+              <Badge variant="outline" className="text-green-600 border-green-300 bg-green-50">
+                <CheckCircle2 className="h-3 w-3 mr-1" />
+                Sauvegardé
+              </Badge>
+            )
+          ) : (
+            <Badge variant="outline" className="text-orange-600 border-orange-300 bg-orange-50">
+              <CloudOff className="h-3 w-3 mr-1" />
+              Non sauvegardé
+            </Badge>
+          )}
           <Badge variant="secondary">
             {graph?.nodes.length || 0} agents
           </Badge>
@@ -322,7 +462,7 @@ export function WorkflowEditor({ onSave }: WorkflowEditorProps) {
             <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
             <Controls />
             <MiniMap
-              nodeColor={(node) => nodeColors[(node.data as any)?.name] || '#6b7280'}
+              nodeColor={(node) => nodeColors[(node.data as unknown as AgentNodeData)?.name] || '#6b7280'}
               maskColor="rgba(0, 0, 0, 0.1)"
             />
 

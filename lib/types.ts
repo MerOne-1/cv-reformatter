@@ -77,6 +77,14 @@ export interface AgentGraphNode {
   level: number;
   inputs: string[];
   outputs: string[];
+  positionX?: number | null;
+  positionY?: number | null;
+}
+
+export interface NodePositionUpdate {
+  agentId: string;
+  x: number;
+  y: number;
 }
 
 export interface AgentGraph {

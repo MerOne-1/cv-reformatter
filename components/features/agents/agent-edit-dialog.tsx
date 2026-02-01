@@ -81,6 +81,8 @@ export function AgentEditDialog({ agent, open, onOpenChange, onSave, onCreate, m
           userPromptTemplate,
           order,
           isActive: true,
+          positionX: null,
+          positionY: null,
         });
       } else if (agent) {
         await onSave(agent, {
