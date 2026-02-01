@@ -22,9 +22,6 @@ RUN pnpm db:generate
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm build
 
-# Compile seed script for production
-RUN pnpm add -D esbuild && pnpm exec esbuild prisma/seed.ts --bundle --platform=node --outfile=prisma/seed.js --external:@prisma/client
-
 # ---- Runner ----
 FROM base AS runner
 WORKDIR /app
@@ -40,10 +37,9 @@ RUN mkdir -p ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
-# Copy prisma for migrations and seed
+# Copy prisma for migrations
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/node_modules/.pnpm/@prisma+client*/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /app/node_modules/@prisma/client ./node_modules/@prisma/client
 
 # Copy entrypoint script
 COPY --chown=nextjs:nodejs scripts/docker-entrypoint.sh ./docker-entrypoint.sh
