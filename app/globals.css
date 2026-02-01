@@ -447,7 +447,60 @@
   background-clip: text;
 }
 
-/* MDXEditor custom styles */
+/* Lexical Editor custom styles */
+.lexical-editor {
+  --font-mono: 'JetBrains Mono', monospace;
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+}
+
+.lexical-editor.prose {
+  max-width: none;
+}
+
+.lexical-h1 {
+  font-family: 'Sora', system-ui, sans-serif;
+  color: hsl(var(--dreamit));
+}
+
+.lexical-h2 {
+  font-family: 'Sora', system-ui, sans-serif;
+  color: hsl(var(--foreground));
+}
+
+.lexical-h3 {
+  color: hsl(var(--muted-foreground));
+}
+
+/* Collaboration cursor styles */
+.collaboration-cursor {
+  position: relative;
+}
+
+.collaboration-cursor__caret {
+  position: absolute;
+  width: 2px;
+  height: 1.2em;
+  animation: cursor-blink 1s infinite;
+}
+
+@keyframes cursor-blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+.collaboration-cursor__label {
+  position: absolute;
+  top: -1.4em;
+  left: -1px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 0.1em 0.3em;
+  border-radius: 3px 3px 3px 0;
+  white-space: nowrap;
+  user-select: none;
+}
+
+/* Legacy MDXEditor styles - keeping for backwards compatibility */
 .mdxeditor {
   --font-mono: 'JetBrains Mono', monospace;
   font-family: 'Plus Jakarta Sans', system-ui, sans-serif;

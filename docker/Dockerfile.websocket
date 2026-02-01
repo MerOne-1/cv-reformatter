@@ -1,0 +1,41 @@
+FROM node:20-alpine AS base
+
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
+WORKDIR /app
+
+FROM base AS deps
+
+COPY package.json pnpm-lock.yaml ./
+
+RUN pnpm install --frozen-lockfile
+
+FROM base AS runner
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 websocket
+
+COPY --from=deps /app/node_modules ./node_modules
+
+COPY package.json ./
+COPY lib ./lib
+COPY scripts/websocket-entrypoint.ts ./scripts/websocket-entrypoint.ts
+COPY tsconfig.json ./
+
+USER websocket
+
+EXPOSE 1234 3002
+
+ENV WEBSOCKET_PORT=1234
+ENV HEALTH_PORT=3002
+ENV REDIS_HOST=redis
+ENV REDIS_PORT=6379
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:3002/health || exit 1
+
+CMD ["pnpm", "tsx", "scripts/websocket-entrypoint.ts"]

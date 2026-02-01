@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,7 +9,10 @@ import { TemplateSelector } from '@/components/layout/template-selector';
 import { MissingInfoAlert } from '@/components/layout/missing-info-alert';
 import { AgentButtons } from '@/components/features/agents/agent-buttons';
 import { WorkflowSteps } from '@/components/features/workflow/workflow-steps';
-import { CVWithImprovements, CVStatus } from '@/lib/types';
+import { CVWithImprovements, CVStatus, CommentWithUser } from '@/lib/types';
+import { authClient } from '@/lib/auth-client';
+import { useComments } from '@/hooks/useComments';
+import { CommentPanel } from './comment-panel';
 import {
   Save,
   FileSearch,
@@ -21,35 +24,18 @@ import {
   Wand2,
   ChevronDown,
   RefreshCw,
+  MessageSquare,
 } from 'lucide-react';
 
-const MDXEditorComponent = dynamic(
-  () => import('@mdxeditor/editor').then((mod) => {
-    const { MDXEditor, headingsPlugin, listsPlugin, markdownShortcutPlugin, thematicBreakPlugin, quotePlugin } = mod;
-    return function Editor({ markdown, onChange }: { markdown: string; onChange: (md: string) => void }) {
-      return (
-        <MDXEditor
-          markdown={markdown}
-          onChange={onChange}
-          plugins={[
-            headingsPlugin(),
-            listsPlugin(),
-            markdownShortcutPlugin(),
-            thematicBreakPlugin(),
-            quotePlugin(),
-          ]}
-          contentEditableClassName="prose prose-sm max-w-none min-h-[400px] p-5 focus:outline-none"
-        />
-      );
-    };
-  }),
+const CollaborativeEditorComponent = dynamic(
+  () => import('./collaborative-editor').then((mod) => mod.CollaborativeEditor),
   {
     ssr: false,
     loading: () => (
       <div className="flex items-center justify-center h-[400px] bg-secondary/30 rounded-xl">
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-          <span className="text-sm text-muted-foreground">Chargement de l&apos;éditeur...</span>
+          <span className="text-sm text-muted-foreground">Chargement de l&apos;éditeur collaboratif...</span>
         </div>
       </div>
     ),
@@ -71,6 +57,37 @@ export function CVEditor({ cv, onUpdate }: CVEditorProps) {
   const [uploading, setUploading] = useState(false);
   const [activeTab, setActiveTab] = useState<'editor' | 'source'>('editor');
   const [showAgents, setShowAgents] = useState(false);
+  const [showComments, setShowComments] = useState(false);
+  const [selectedCommentId, setSelectedCommentId] = useState<string | null>(null);
+  const [userColor, setUserColor] = useState<string | undefined>(undefined);
+
+  const { data: session } = authClient.useSession();
+  const userId = useMemo(() => session?.user?.id || `guest-${Math.random().toString(36).substring(2, 11)}`, [session?.user?.id]);
+  const userName = useMemo(() => session?.user?.name || 'Invité', [session?.user?.name]);
+
+  const {
+    comments,
+    loading: commentsLoading,
+    addComment,
+    updateComment,
+    deleteComment,
+    resolveComment,
+  } = useComments({ cvId: cv.id, userId });
+
+  useEffect(() => {
+    let isMounted = true;
+    if (session?.user?.id) {
+      fetch(`/api/users/${session.user.id}/preferences`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (isMounted && data.success && data.data.highlightColor) {
+            setUserColor(data.data.highlightColor);
+          }
+        })
+        .catch(console.error);
+    }
+    return () => { isMounted = false; };
+  }, [session?.user?.id]);
 
   useEffect(() => {
     setMarkdown(cv.markdownContent || '');
@@ -280,6 +297,20 @@ export function CVEditor({ cv, onUpdate }: CVEditorProps) {
                 <ChevronDown className={`w-4 h-4 ml-1 transition-transform ${showAgents ? 'rotate-180' : ''}`} />
               </Button>
 
+              <Button
+                onClick={() => setShowComments(!showComments)}
+                variant={showComments ? 'default' : 'outline'}
+                className="relative"
+              >
+                <MessageSquare className="w-4 h-4 mr-2" />
+                Commentaires
+                {comments.filter((c) => !c.resolved).length > 0 && (
+                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-warning text-warning-foreground text-xs rounded-full flex items-center justify-center">
+                    {comments.filter((c) => !c.resolved).length}
+                  </span>
+                )}
+              </Button>
+
               <div className="flex-1" />
 
               <Button
@@ -325,31 +356,66 @@ export function CVEditor({ cv, onUpdate }: CVEditorProps) {
 
       <CardContent className="flex-1 overflow-hidden p-0">
         {hasContent ? (
-          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'editor' | 'source')} className="h-full flex flex-col">
-            <div className="px-5 pt-4 pb-2 border-b bg-secondary/30">
-              <TabsList className="bg-secondary/50">
-                <TabsTrigger value="editor" className="gap-2">
-                  <Eye className="w-4 h-4" />
-                  Éditeur
-                </TabsTrigger>
-                <TabsTrigger value="source" className="gap-2">
-                  <Code2 className="w-4 h-4" />
-                  Markdown
-                </TabsTrigger>
-              </TabsList>
+          <div className="h-full flex">
+            <div className="flex-1 flex flex-col overflow-hidden">
+              <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'editor' | 'source')} className="h-full flex flex-col">
+                <div className="px-5 pt-4 pb-2 border-b bg-secondary/30">
+                  <TabsList className="bg-secondary/50">
+                    <TabsTrigger value="editor" className="gap-2">
+                      <Eye className="w-4 h-4" />
+                      Éditeur
+                    </TabsTrigger>
+                    <TabsTrigger value="source" className="gap-2">
+                      <Code2 className="w-4 h-4" />
+                      Markdown
+                    </TabsTrigger>
+                  </TabsList>
+                </div>
+                <TabsContent value="editor" className="flex-1 overflow-auto m-0 scrollbar-thin">
+                  <CollaborativeEditorComponent
+                    documentId={cv.id}
+                    userId={userId}
+                    userName={userName}
+                    userColor={userColor}
+                    initialMarkdown={markdown}
+                    onChange={setMarkdown}
+                  />
+                </TabsContent>
+                <TabsContent value="source" className="flex-1 overflow-hidden m-0 p-4">
+                  <textarea
+                    className="w-full h-full p-4 font-mono text-sm bg-secondary/30 border rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-ring scrollbar-thin"
+                    value={markdown}
+                    onChange={(e) => setMarkdown(e.target.value)}
+                    spellCheck={false}
+                  />
+                </TabsContent>
+              </Tabs>
             </div>
-            <TabsContent value="editor" className="flex-1 overflow-auto m-0 scrollbar-thin">
-              <MDXEditorComponent markdown={markdown} onChange={setMarkdown} />
-            </TabsContent>
-            <TabsContent value="source" className="flex-1 overflow-hidden m-0 p-4">
-              <textarea
-                className="w-full h-full p-4 font-mono text-sm bg-secondary/30 border rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-ring scrollbar-thin"
-                value={markdown}
-                onChange={(e) => setMarkdown(e.target.value)}
-                spellCheck={false}
-              />
-            </TabsContent>
-          </Tabs>
+
+            <CommentPanel
+              comments={comments}
+              isOpen={showComments}
+              onClose={() => setShowComments(false)}
+              onAddComment={async (content) => {
+                await addComment({
+                  content,
+                  startOffset: 0,
+                  endOffset: 0,
+                });
+              }}
+              onResolveComment={async (id) => {
+                await resolveComment(id, userId);
+              }}
+              onDeleteComment={async (id) => { await deleteComment(id); }}
+              onEditComment={async (id, content) => {
+                await updateComment(id, { content });
+              }}
+              onSelectComment={(comment) => setSelectedCommentId(comment.id)}
+              selectedCommentId={selectedCommentId}
+              currentUserId={userId}
+              loading={commentsLoading}
+            />
+          </div>
         ) : (
           <div className="flex flex-col items-center justify-center h-full p-8">
             <div className="relative">
