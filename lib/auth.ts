@@ -22,6 +22,8 @@ export const auth = betterAuth({
   },
   trustedOrigins: [
     process.env.BETTER_AUTH_BASE_URL || "http://localhost:3000",
+    "http://46.224.68.203:3000",
+    "http://46.224.68.203",
   ],
 });
 
