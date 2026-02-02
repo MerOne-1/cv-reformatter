@@ -35,11 +35,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Build context: include CV notes for contexte agent
+    let fullContext = additionalContext || '';
+    if (agentType === 'contexte' && cv.notes) {
+      const notesSection = `\n\n--- Notes de l'utilisateur ---\n${cv.notes}\n---`;
+      fullContext = fullContext ? `${fullContext}${notesSection}` : notesSection.trim();
+    }
+
     // Get prompts for the agent type (from DB or fallback to static)
     const { system, user } = await getAgentPrompts(
       agentType,
       cv.markdownContent,
-      additionalContext
+      fullContext || undefined
     );
 
     // Call LLM
