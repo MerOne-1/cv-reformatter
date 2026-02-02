@@ -1,38 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
+import { apiRoute, success, error } from '@/lib/api-route';
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params;
-
-    const agent = await prisma.aIAgent.findUnique({
-      where: { id },
-    });
-
-    if (!agent) {
-      return NextResponse.json(
-        { success: false, error: 'Agent not found' },
-        { status: 404 }
-      );
-    }
-
-    return NextResponse.json({
-      success: true,
-      data: agent,
-    });
-  } catch (error) {
-    console.error('Error fetching agent:', error);
-    return NextResponse.json(
-      { success: false, error: 'Failed to fetch agent' },
-      { status: 500 }
-    );
-  }
-}
+const paramsSchema = z.object({ id: z.string() });
 
 const updateAgentSchema = z.object({
   displayName: z.string().min(1).max(100).optional(),
@@ -43,71 +15,52 @@ const updateAgentSchema = z.object({
   order: z.number().int().optional(),
 });
 
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params;
-    const body = await request.json();
-    const data = updateAgentSchema.parse(body);
-
-    const agent = await prisma.aIAgent.update({
-      where: { id },
-      data,
+export const GET = apiRoute()
+  .params(paramsSchema)
+  .handler(async (_, { params }) => {
+    const agent = await prisma.aIAgent.findUnique({
+      where: { id: params.id },
     });
 
-    return NextResponse.json({
-      success: true,
-      data: agent,
-    });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { success: false, error: 'Invalid data', details: error.errors },
-        { status: 400 }
-      );
+    if (!agent) {
+      return error('Agent not found', 404);
     }
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
-      return NextResponse.json(
-        { success: false, error: 'Agent not found' },
-        { status: 404 }
-      );
+
+    return success(agent);
+  });
+
+export const PATCH = apiRoute()
+  .params(paramsSchema)
+  .body(updateAgentSchema)
+  .handler(async (_, { params, body }) => {
+    try {
+      const agent = await prisma.aIAgent.update({
+        where: { id: params.id },
+        data: body,
+      });
+
+      return success(agent);
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025') {
+        return error('Agent not found', 404);
+      }
+      throw e;
     }
-    console.error('Error updating agent:', error);
-    return NextResponse.json(
-      { success: false, error: 'Failed to update agent' },
-      { status: 500 }
-    );
-  }
-}
+  });
 
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params;
+export const DELETE = apiRoute()
+  .params(paramsSchema)
+  .handler(async (_, { params }) => {
+    try {
+      await prisma.aIAgent.delete({
+        where: { id: params.id },
+      });
 
-    await prisma.aIAgent.delete({
-      where: { id },
-    });
-
-    return NextResponse.json({
-      success: true,
-      message: 'Agent deleted',
-    });
-  } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
-      return NextResponse.json(
-        { success: false, error: 'Agent not found' },
-        { status: 404 }
-      );
+      return success({ deleted: true });
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025') {
+        return error('Agent not found', 404);
+      }
+      throw e;
     }
-    console.error('Error deleting agent:', error);
-    return NextResponse.json(
-      { success: false, error: 'Failed to delete agent' },
-      { status: 500 }
-    );
-  }
-}
+  });

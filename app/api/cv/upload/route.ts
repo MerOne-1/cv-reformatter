@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { uploadFile, getRawCVKey } from '@/lib/b2';
 import prisma from '@/lib/db';
-import { isValidCVFile } from '@/lib/utils';
+import { isValidCVFile, getFileExtension, validateCVMagicBytes } from '@/lib/utils';
+import { randomUUID } from 'crypto';
 
 // Limite de taille de fichier: 10 Mo
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
 export async function POST(request: NextRequest) {
+  const errorId = randomUUID().slice(0, 8);
+
   try {
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
@@ -37,6 +40,15 @@ export async function POST(request: NextRequest) {
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
+    // Validate magic bytes to ensure file content matches extension
+    const extension = getFileExtension(file.name);
+    if (!validateCVMagicBytes(buffer, extension)) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid file content. File does not match expected format.' },
+        { status: 400 }
+      );
+    }
+
     // Upload to B2
     const key = getRawCVKey(file.name);
     const url = await uploadFile(key, buffer, file.type);
@@ -60,11 +72,12 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('Error uploading CV:', error);
+    console.error(`Error uploading CV [${errorId}]:`, error);
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to upload CV',
+        error: 'Failed to upload CV',
+        errorId,
       },
       { status: 500 }
     );

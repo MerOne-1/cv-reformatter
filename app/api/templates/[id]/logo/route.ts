@@ -92,21 +92,29 @@ export async function POST(
 
     // Delete old logo if exists (log but don't block on failure)
     const oldLogoUrl = type === 'main' ? template.logoUrl : type === 'header' ? template.logoHeaderUrl : template.logoFooterUrl;
+    let deleteWarning: string | null = null;
     if (oldLogoUrl) {
       try {
         await deleteTemplateLogo(oldLogoUrl);
       } catch (err) {
-        console.warn(`Failed to delete old ${type} logo (orphan file may remain):`, oldLogoUrl, err);
+        console.error(`Failed to delete old ${type} logo (orphan file may remain):`, oldLogoUrl, err);
+        deleteWarning = `L'ancien logo ${type} n'a pas pu être supprimé du stockage`;
       }
     }
 
     // Upload new logo
     const url = await uploadTemplateLogo(id, type, buffer, file.name);
 
-    return NextResponse.json({
+    const response: { success: true; data: { url: string; type: string }; warning?: string } = {
       success: true,
       data: { url, type },
-    });
+    };
+
+    if (deleteWarning) {
+      response.warning = deleteWarning;
+    }
+
+    return NextResponse.json(response);
   } catch (error) {
     console.error('Error uploading logo:', error);
     return NextResponse.json(

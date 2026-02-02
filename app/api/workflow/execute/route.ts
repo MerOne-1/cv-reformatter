@@ -1,35 +1,28 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { z } from 'zod';
 import { getWorkflowOrchestrationQueue } from '@/lib/queue';
+import { apiRoute, error } from '@/lib/api-route';
 
 const executeSchema = z.object({
   cvId: z.string().min(1),
   additionalContext: z.string().optional(),
 });
 
-export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json();
-    const data = executeSchema.parse(body);
-
+export const POST = apiRoute()
+  .body(executeSchema)
+  .handler(async (_, { body }) => {
     const cv = await prisma.cV.findUnique({
-      where: { id: data.cvId },
+      where: { id: body.cvId },
       select: { id: true, markdownContent: true, status: true },
     });
 
     if (!cv) {
-      return NextResponse.json(
-        { success: false, error: 'CV introuvable' },
-        { status: 404 }
-      );
+      return error('CV introuvable', 404);
     }
 
     if (!cv.markdownContent) {
-      return NextResponse.json(
-        { success: false, error: 'Le CV doit être extrait avant de lancer un workflow' },
-        { status: 400 }
-      );
+      return error('Le CV doit être extrait avant de lancer un workflow', 400);
     }
 
     const activeAgents = await prisma.aIAgent.findMany({
@@ -38,18 +31,15 @@ export async function POST(request: NextRequest) {
     });
 
     if (activeAgents.length === 0) {
-      return NextResponse.json(
-        { success: false, error: 'Aucun agent actif configuré' },
-        { status: 400 }
-      );
+      return error('Aucun agent actif configuré', 400);
     }
 
     const execution = await prisma.workflowExecution.create({
       data: {
-        cvId: data.cvId,
+        cvId: body.cvId,
         status: 'PENDING',
-        inputData: data.additionalContext
-          ? JSON.stringify({ additionalContext: data.additionalContext })
+        inputData: body.additionalContext
+          ? JSON.stringify({ additionalContext: body.additionalContext })
           : null,
       },
     });
@@ -59,8 +49,8 @@ export async function POST(request: NextRequest) {
       'orchestrate-workflow',
       {
         executionId: execution.id,
-        cvId: data.cvId,
-        additionalContext: data.additionalContext,
+        cvId: body.cvId,
+        additionalContext: body.additionalContext,
       },
       {
         jobId: `workflow-${execution.id}`,
@@ -75,17 +65,4 @@ export async function POST(request: NextRequest) {
         message: 'Workflow lancé avec succès',
       },
     });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { success: false, error: 'Données invalides', details: error.errors },
-        { status: 400 }
-      );
-    }
-    console.error('Error executing workflow:', error);
-    return NextResponse.json(
-      { success: false, error: 'Erreur lors du lancement du workflow' },
-      { status: 500 }
-    );
-  }
-}
+  });

@@ -51,6 +51,9 @@ model CV {
   // Missing info tracking
   missingFields   String[]  @default([])
 
+  // User notes
+  notes           String?   @db.Text
+
   // Status tracking
   status          CVStatus  @default(PENDING)
   templateName    String    @default("DREAMIT")

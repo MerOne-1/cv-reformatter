@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/db';
+import { apiRoute, error } from '@/lib/api-route';
 
-export async function GET() {
+export const GET = apiRoute().handler(async () => {
   try {
-    // Check database connection
     await prisma.$queryRaw`SELECT 1`;
 
     return NextResponse.json({
@@ -13,15 +13,9 @@ export async function GET() {
         database: 'connected',
       },
     });
-  } catch (error) {
-    console.error('Health check failed:', error);
-    return NextResponse.json(
-      {
-        status: 'unhealthy',
-        timestamp: new Date().toISOString(),
-        error: error instanceof Error ? error.message : 'Unknown error',
-      },
-      { status: 503 }
-    );
+  } catch (e) {
+    // Log the actual error but don't expose details to clients
+    console.error('Health check - database connection failed:', e);
+    return error('Database connection failed', 503);
   }
-}
+});

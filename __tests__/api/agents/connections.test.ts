@@ -13,11 +13,15 @@ vi.mock('@/lib/db', () => ({
     aIAgent: {
       findUnique: vi.fn(),
     },
+    $transaction: vi.fn(),
   },
 }));
 
 import prisma from '@/lib/db';
 import { GET, POST } from '@/app/api/agents/connections/route';
+
+// Helper to create context for routes without params
+const emptyContext = { params: Promise.resolve({}) };
 
 describe('Agent Connections API', () => {
   beforeEach(() => {
@@ -40,7 +44,8 @@ describe('Agent Connections API', () => {
 
       vi.mocked(prisma.agentConnection.findMany).mockResolvedValue(mockConnections as any);
 
-      const response = await GET();
+      const request = new NextRequest('http://localhost/api/agents/connections');
+      const response = await GET(request, emptyContext);
       const data = await response.json();
 
       expect(data.success).toBe(true);
@@ -63,11 +68,20 @@ describe('Agent Connections API', () => {
         targetAgent: { id: 'agent-2', name: 'adaptateur', displayName: 'Adaptateur', isActive: true },
       };
 
-      vi.mocked(prisma.aIAgent.findUnique)
-        .mockResolvedValueOnce(mockSourceAgent as any)
-        .mockResolvedValueOnce(mockTargetAgent as any);
-      vi.mocked(prisma.agentConnection.findMany).mockResolvedValue([]);
-      vi.mocked(prisma.agentConnection.create).mockResolvedValue(mockConnection as any);
+      vi.mocked(prisma.$transaction).mockImplementation(async (callback: any) => {
+        const tx = {
+          aIAgent: {
+            findUnique: vi.fn()
+              .mockResolvedValueOnce(mockSourceAgent)
+              .mockResolvedValueOnce(mockTargetAgent),
+          },
+          agentConnection: {
+            findMany: vi.fn().mockResolvedValue([]),
+            create: vi.fn().mockResolvedValue(mockConnection),
+          },
+        };
+        return callback(tx);
+      });
 
       const request = new NextRequest('http://localhost/api/agents/connections', {
         method: 'POST',
@@ -77,7 +91,7 @@ describe('Agent Connections API', () => {
         }),
       });
 
-      const response = await POST(request);
+      const response = await POST(request, emptyContext);
       const data = await response.json();
 
       expect(data.success).toBe(true);
@@ -94,7 +108,7 @@ describe('Agent Connections API', () => {
         }),
       });
 
-      const response = await POST(request);
+      const response = await POST(request, emptyContext);
       const data = await response.json();
 
       expect(data.success).toBe(false);
@@ -103,7 +117,18 @@ describe('Agent Connections API', () => {
     });
 
     it('should reject connection when agents do not exist', async () => {
-      vi.mocked(prisma.aIAgent.findUnique).mockResolvedValue(null);
+      vi.mocked(prisma.$transaction).mockImplementation(async (callback: any) => {
+        const tx = {
+          aIAgent: {
+            findUnique: vi.fn().mockResolvedValue(null),
+          },
+          agentConnection: {
+            findMany: vi.fn(),
+            create: vi.fn(),
+          },
+        };
+        return callback(tx);
+      });
 
       const request = new NextRequest('http://localhost/api/agents/connections', {
         method: 'POST',
@@ -113,7 +138,7 @@ describe('Agent Connections API', () => {
         }),
       });
 
-      const response = await POST(request);
+      const response = await POST(request, emptyContext);
       const data = await response.json();
 
       expect(data.success).toBe(false);
@@ -125,13 +150,20 @@ describe('Agent Connections API', () => {
       const mockSourceAgent = { id: 'agent-1', name: 'enrichisseur' };
       const mockTargetAgent = { id: 'agent-2', name: 'adaptateur' };
 
-      vi.mocked(prisma.aIAgent.findUnique)
-        .mockResolvedValueOnce(mockSourceAgent as any)
-        .mockResolvedValueOnce(mockTargetAgent as any);
-
-      vi.mocked(prisma.agentConnection.findMany).mockResolvedValue([
-        { targetAgentId: 'agent-1' },
-      ] as any);
+      vi.mocked(prisma.$transaction).mockImplementation(async (callback: any) => {
+        const tx = {
+          aIAgent: {
+            findUnique: vi.fn()
+              .mockResolvedValueOnce(mockSourceAgent)
+              .mockResolvedValueOnce(mockTargetAgent),
+          },
+          agentConnection: {
+            findMany: vi.fn().mockResolvedValue([{ targetAgentId: 'agent-1' }]),
+            create: vi.fn(),
+          },
+        };
+        return callback(tx);
+      });
 
       const request = new NextRequest('http://localhost/api/agents/connections', {
         method: 'POST',
@@ -141,7 +173,7 @@ describe('Agent Connections API', () => {
         }),
       });
 
-      const response = await POST(request);
+      const response = await POST(request, emptyContext);
       const data = await response.json();
 
       expect(data.success).toBe(false);

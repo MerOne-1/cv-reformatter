@@ -1,8 +1,11 @@
-import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { detectMissingFields } from '@/lib/types';
 import { deleteFile } from '@/lib/b2';
 import { z } from 'zod';
+import { apiRoute, success, error } from '@/lib/api-route';
+import { NextResponse } from 'next/server';
+
+const paramsSchema = z.object({ id: z.string() });
 
 const updateSchema = z.object({
   markdownContent: z.string().optional(),
@@ -12,17 +15,14 @@ const updateSchema = z.object({
     .optional(),
   consultantName: z.string().optional(),
   title: z.string().optional(),
+  notes: z.string().max(10000).nullable().optional(),
 });
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params;
-
+export const GET = apiRoute()
+  .params(paramsSchema)
+  .handler(async (_, { params }) => {
     const cv = await prisma.cV.findUnique({
-      where: { id },
+      where: { id: params.id },
       include: {
         improvements: {
           orderBy: { appliedAt: 'desc' },
@@ -31,105 +31,69 @@ export async function GET(
     });
 
     if (!cv) {
-      return NextResponse.json(
-        { success: false, error: 'CV not found' },
-        { status: 404 }
-      );
+      return error('CV not found', 404);
     }
 
-    return NextResponse.json({
-      success: true,
-      data: cv,
-    });
-  } catch (error) {
-    console.error('Error fetching CV:', error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : 'Failed to fetch CV',
-      },
-      { status: 500 }
-    );
-  }
-}
+    return success(cv);
+  });
 
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params;
-    const body = await request.json();
-    const validatedData = updateSchema.parse(body);
-
-    // If markdown content is being updated, detect missing fields
+export const PATCH = apiRoute()
+  .params(paramsSchema)
+  .body(updateSchema)
+  .handler(async (_, { params, body }) => {
     let missingFields: string[] | undefined;
-    if (validatedData.markdownContent) {
-      missingFields = detectMissingFields(validatedData.markdownContent);
+    if (body.markdownContent) {
+      missingFields = detectMissingFields(body.markdownContent);
     }
 
     const cv = await prisma.cV.update({
-      where: { id },
+      where: { id: params.id },
       data: {
-        ...validatedData,
+        ...body,
         ...(missingFields !== undefined && { missingFields }),
         updatedAt: new Date(),
       },
     });
 
-    return NextResponse.json({
-      success: true,
-      data: cv,
-    });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { success: false, error: 'Invalid request data', details: error.errors },
-        { status: 400 }
-      );
-    }
+    return success(cv);
+  });
 
-    console.error('Error updating CV:', error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : 'Failed to update CV',
-      },
-      { status: 500 }
-    );
-  }
-}
+export const DELETE = apiRoute()
+  .params(paramsSchema)
+  .handler(async (_, { params }) => {
+    // Use transaction to ensure atomicity and prevent race conditions
+    const result = await prisma.$transaction(async (tx) => {
+      const cv = await tx.cV.findUnique({
+        where: { id: params.id },
+        select: {
+          originalKey: true,
+          generatedKey: true,
+        },
+      });
 
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params;
+      if (!cv) {
+        return { notFound: true } as const;
+      }
 
-    // Récupérer le CV pour obtenir les clés B2
-    const cv = await prisma.cV.findUnique({
-      where: { id },
-      select: {
-        originalKey: true,
-        generatedKey: true,
-      },
+      // Delete from database first (inside transaction)
+      await tx.cV.delete({
+        where: { id: params.id },
+      });
+
+      return { cv } as const;
     });
 
-    if (!cv) {
-      return NextResponse.json(
-        { success: false, error: 'CV not found' },
-        { status: 404 }
-      );
+    if ('notFound' in result) {
+      return error('CV not found', 404);
     }
 
-    // Supprimer les fichiers de Backblaze B2
+    // Delete files from B2 after successful DB transaction
+    const { cv } = result;
     const deleteResults = await Promise.allSettled([
       cv.originalKey ? deleteFile(cv.originalKey) : Promise.resolve(),
       cv.generatedKey ? deleteFile(cv.generatedKey) : Promise.resolve(),
     ]);
 
-    // Logger les erreurs de suppression B2 mais continuer avec la suppression DB
     const failedDeletions: string[] = [];
     deleteResults.forEach((result, index) => {
       if (result.status === 'rejected') {
@@ -139,12 +103,6 @@ export async function DELETE(
       }
     });
 
-    // Supprimer le CV de la base de données
-    await prisma.cV.delete({
-      where: { id },
-    });
-
-    // Inclure un avertissement si certains fichiers B2 n'ont pas pu être supprimés
     if (failedDeletions.length > 0) {
       return NextResponse.json({
         success: true,
@@ -157,14 +115,4 @@ export async function DELETE(
       success: true,
       message: 'CV deleted successfully',
     });
-  } catch (error) {
-    console.error('Error deleting CV:', error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : 'Failed to delete CV',
-      },
-      { status: 500 }
-    );
-  }
-}
+  });

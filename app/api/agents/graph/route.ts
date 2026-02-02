@@ -1,93 +1,82 @@
-import { NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import type { AgentGraph, AgentGraphNode } from '@/lib/types';
+import { apiRoute, success } from '@/lib/api-route';
 
-export async function GET() {
-  try {
-    const [agents, connections] = await Promise.all([
-      prisma.aIAgent.findMany({
-        orderBy: { order: 'asc' },
-        select: {
-          id: true,
-          name: true,
-          displayName: true,
-          isActive: true,
-          order: true,
-          positionX: true,
-          positionY: true,
-        },
-      }),
-      prisma.agentConnection.findMany({
-        where: { isActive: true },
-        select: {
-          id: true,
-          sourceAgentId: true,
-          targetAgentId: true,
-          isActive: true,
-        },
-      }),
-    ]);
+export const GET = apiRoute().handler(async () => {
+  const [agents, connections] = await Promise.all([
+    prisma.aIAgent.findMany({
+      orderBy: { order: 'asc' },
+      select: {
+        id: true,
+        name: true,
+        displayName: true,
+        isActive: true,
+        order: true,
+        positionX: true,
+        positionY: true,
+      },
+    }),
+    prisma.agentConnection.findMany({
+      where: { isActive: true },
+      select: {
+        id: true,
+        sourceAgentId: true,
+        targetAgentId: true,
+        isActive: true,
+      },
+    }),
+  ]);
 
-    const incomingEdges = new Map<string, string[]>();
-    const outgoingEdges = new Map<string, string[]>();
+  const incomingEdges = new Map<string, string[]>();
+  const outgoingEdges = new Map<string, string[]>();
 
-    for (const agent of agents) {
-      incomingEdges.set(agent.id, []);
-      outgoingEdges.set(agent.id, []);
-    }
-
-    for (const conn of connections) {
-      const incoming = incomingEdges.get(conn.targetAgentId) || [];
-      incoming.push(conn.sourceAgentId);
-      incomingEdges.set(conn.targetAgentId, incoming);
-
-      const outgoing = outgoingEdges.get(conn.sourceAgentId) || [];
-      outgoing.push(conn.targetAgentId);
-      outgoingEdges.set(conn.sourceAgentId, outgoing);
-    }
-
-    const levels = computeLevels(agents.map(a => a.id), incomingEdges);
-    const validationErrors = validateGraph(agents.map(a => a.id), incomingEdges, outgoingEdges);
-
-    const nodes: AgentGraphNode[] = agents.map(agent => ({
-      id: agent.id,
-      name: agent.name,
-      displayName: agent.displayName,
-      isActive: agent.isActive,
-      order: agent.order,
-      level: levels.get(agent.id) || 0,
-      inputs: incomingEdges.get(agent.id) || [],
-      outputs: outgoingEdges.get(agent.id) || [],
-      positionX: agent.positionX,
-      positionY: agent.positionY,
-    }));
-
-    const edges = connections.map(conn => ({
-      id: conn.id,
-      source: conn.sourceAgentId,
-      target: conn.targetAgentId,
-      isActive: conn.isActive,
-    }));
-
-    const graph: AgentGraph = {
-      nodes,
-      edges,
-      isValid: validationErrors.length === 0,
-      validationErrors,
-    };
-
-    return NextResponse.json({
-      success: true,
-      data: graph,
-    });
-  } catch (error) {
-    console.error('Error fetching agent graph:', error);
-    return NextResponse.json(
-      { success: false, error: 'Failed to fetch agent graph' },
-      { status: 500 }
-    );
+  for (const agent of agents) {
+    incomingEdges.set(agent.id, []);
+    outgoingEdges.set(agent.id, []);
   }
-}
+
+  for (const conn of connections) {
+    const incoming = incomingEdges.get(conn.targetAgentId) || [];
+    incoming.push(conn.sourceAgentId);
+    incomingEdges.set(conn.targetAgentId, incoming);
+
+    const outgoing = outgoingEdges.get(conn.sourceAgentId) || [];
+    outgoing.push(conn.targetAgentId);
+    outgoingEdges.set(conn.sourceAgentId, outgoing);
+  }
+
+  const levels = computeLevels(agents.map(a => a.id), incomingEdges);
+  const validationErrors = validateGraph(agents.map(a => a.id), incomingEdges, outgoingEdges);
+
+  const nodes: AgentGraphNode[] = agents.map(agent => ({
+    id: agent.id,
+    name: agent.name,
+    displayName: agent.displayName,
+    isActive: agent.isActive,
+    order: agent.order,
+    level: levels.get(agent.id) || 0,
+    inputs: incomingEdges.get(agent.id) || [],
+    outputs: outgoingEdges.get(agent.id) || [],
+    positionX: agent.positionX,
+    positionY: agent.positionY,
+  }));
+
+  const edges = connections.map(conn => ({
+    id: conn.id,
+    source: conn.sourceAgentId,
+    target: conn.targetAgentId,
+    isActive: conn.isActive,
+  }));
+
+  const graph: AgentGraph = {
+    nodes,
+    edges,
+    isValid: validationErrors.length === 0,
+    validationErrors,
+  };
+
+  return success(graph);
+});
 
 function computeLevels(
   agentIds: string[],

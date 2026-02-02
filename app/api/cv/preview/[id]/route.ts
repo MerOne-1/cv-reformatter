@@ -1,30 +1,25 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { downloadFile } from '@/lib/b2';
+import { z } from 'zod';
+import { apiRoute, error } from '@/lib/api-route';
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params;
+const paramsSchema = z.object({ id: z.string() });
 
+export const GET = apiRoute()
+  .params(paramsSchema)
+  .handler(async (_, { params }) => {
     const cv = await prisma.cV.findUnique({
-      where: { id },
+      where: { id: params.id },
       select: { originalKey: true, originalName: true },
     });
 
     if (!cv) {
-      return NextResponse.json(
-        { success: false, error: 'CV not found' },
-        { status: 404 }
-      );
+      return error('CV not found', 404);
     }
 
-    // Download file from B2
     const fileBuffer = await downloadFile(cv.originalKey);
 
-    // Determine content type
     const ext = cv.originalName.split('.').pop()?.toLowerCase();
     const contentType = ext === 'pdf'
       ? 'application/pdf'
@@ -37,14 +32,4 @@ export async function GET(
         'Cache-Control': 'public, max-age=3600',
       },
     });
-  } catch (error) {
-    console.error('Error fetching CV preview:', error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : 'Failed to fetch CV',
-      },
-      { status: 500 }
-    );
-  }
-}
+  });

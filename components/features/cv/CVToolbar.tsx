@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import {
   Eye,
   Download,
@@ -9,9 +10,11 @@ import {
   X,
   Code2,
   RefreshCw,
+  StickyNote,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TemplateSelector } from '@/components/layout/template-selector';
+import { CVNotesDialog } from '@/components/features/cv/CVNotesDialog';
 import { CVWithImprovements } from '@/lib/types';
 
 interface CVToolbarProps {
@@ -30,6 +33,8 @@ interface CVToolbarProps {
   extracting: boolean;
   generating: boolean;
   uploading: boolean;
+  notes: string | null;
+  onNotesChange: (notes: string | null) => Promise<void>;
 }
 
 export function CVToolbar({
@@ -48,7 +53,11 @@ export function CVToolbar({
   extracting,
   generating,
   uploading,
+  notes,
+  onNotesChange,
 }: CVToolbarProps) {
+  const [notesDialogOpen, setNotesDialogOpen] = useState(false);
+
   return (
     <div className="flex-shrink-0 h-14 border-b border-border flex items-center justify-between px-5 bg-background-elevated">
       <div className="flex items-center gap-4">
@@ -65,6 +74,15 @@ export function CVToolbar({
       <div className="flex items-center gap-2">
         {hasContent && (
           <>
+            <Button
+              variant={notes ? 'secondary' : 'outline'}
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setNotesDialogOpen(true)}
+              title="Notes du CV"
+            >
+              <StickyNote className="w-4 h-4" />
+            </Button>
             <Button
               variant={showOriginal ? 'secondary' : 'outline'}
               size="icon"
@@ -142,6 +160,13 @@ export function CVToolbar({
           </>
         )}
       </div>
+
+      <CVNotesDialog
+        open={notesDialogOpen}
+        onOpenChange={setNotesDialogOpen}
+        notes={notes}
+        onSave={onNotesChange}
+      />
     </div>
   );
 }

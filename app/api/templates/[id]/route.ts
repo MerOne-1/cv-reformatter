@@ -1,40 +1,11 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { z } from 'zod';
 import { TemplateConfigSchema, toTemplateWithParsedConfig } from '@/lib/templates/types';
 import { deleteTemplateLogo } from '@/lib/templates/template-utils';
+import { apiRoute, success, error } from '@/lib/api-route';
 
-// GET single template with parsed config
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params;
-
-    const template = await prisma.template.findUnique({
-      where: { id },
-    });
-
-    if (!template) {
-      return NextResponse.json(
-        { success: false, error: 'Template not found' },
-        { status: 404 }
-      );
-    }
-
-    return NextResponse.json({
-      success: true,
-      data: toTemplateWithParsedConfig(template),
-    });
-  } catch (error) {
-    console.error('Error fetching template:', error);
-    return NextResponse.json(
-      { success: false, error: 'Failed to fetch template' },
-      { status: 500 }
-    );
-  }
-}
+const paramsSchema = z.object({ id: z.string() });
 
 const updateTemplateSchema = z.object({
   displayName: z.string().min(1).max(100).optional(),
@@ -42,7 +13,7 @@ const updateTemplateSchema = z.object({
   secondaryColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
   textColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
   mutedColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
-  logoUrl: z.string().nullable().optional(),
+  logoUrl: z.string().url().nullable().optional(),
   logoHeaderUrl: z.string().url().nullable().optional(),
   logoFooterUrl: z.string().url().nullable().optional(),
   website: z.string().nullable().optional(),
@@ -50,37 +21,46 @@ const updateTemplateSchema = z.object({
   isActive: z.boolean().optional(),
 });
 
-// PATCH update template
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params;
-    const body = await request.json();
-    const data = updateTemplateSchema.parse(body);
+export const GET = apiRoute()
+  .params(paramsSchema)
+  .handler(async (_, { params }) => {
+    const template = await prisma.template.findUnique({
+      where: { id: params.id },
+    });
 
+    if (!template) {
+      return error('Template not found', 404);
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: toTemplateWithParsedConfig(template),
+    });
+  });
+
+export const PATCH = apiRoute()
+  .params(paramsSchema)
+  .body(updateTemplateSchema)
+  .handler(async (_, { params, body }) => {
     const updateData: Record<string, unknown> = {};
 
-    // Copy simple fields
-    if (data.displayName !== undefined) updateData.displayName = data.displayName;
-    if (data.primaryColor !== undefined) updateData.primaryColor = data.primaryColor;
-    if (data.secondaryColor !== undefined) updateData.secondaryColor = data.secondaryColor;
-    if (data.textColor !== undefined) updateData.textColor = data.textColor;
-    if (data.mutedColor !== undefined) updateData.mutedColor = data.mutedColor;
-    if (data.logoUrl !== undefined) updateData.logoUrl = data.logoUrl;
-    if (data.logoHeaderUrl !== undefined) updateData.logoHeaderUrl = data.logoHeaderUrl;
-    if (data.logoFooterUrl !== undefined) updateData.logoFooterUrl = data.logoFooterUrl;
-    if (data.website !== undefined) updateData.website = data.website;
-    if (data.isActive !== undefined) updateData.isActive = data.isActive;
+    if (body.displayName !== undefined) updateData.displayName = body.displayName;
+    if (body.primaryColor !== undefined) updateData.primaryColor = body.primaryColor;
+    if (body.secondaryColor !== undefined) updateData.secondaryColor = body.secondaryColor;
+    if (body.textColor !== undefined) updateData.textColor = body.textColor;
+    if (body.mutedColor !== undefined) updateData.mutedColor = body.mutedColor;
+    if (body.logoUrl !== undefined) updateData.logoUrl = body.logoUrl;
+    if (body.logoHeaderUrl !== undefined) updateData.logoHeaderUrl = body.logoHeaderUrl;
+    if (body.logoFooterUrl !== undefined) updateData.logoFooterUrl = body.logoFooterUrl;
+    if (body.website !== undefined) updateData.website = body.website;
+    if (body.isActive !== undefined) updateData.isActive = body.isActive;
 
-    // Stringify config if provided
-    if (data.config !== undefined) {
-      updateData.config = JSON.stringify(data.config);
+    if (body.config !== undefined) {
+      updateData.config = JSON.stringify(body.config);
     }
 
     const template = await prisma.template.update({
-      where: { id },
+      where: { id: params.id },
       data: updateData,
     });
 
@@ -88,61 +68,45 @@ export async function PATCH(
       success: true,
       data: toTemplateWithParsedConfig(template),
     });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { success: false, error: 'Invalid data', details: error.errors },
-        { status: 400 }
-      );
-    }
-    console.error('Error updating template:', error);
-    return NextResponse.json(
-      { success: false, error: 'Failed to update template' },
-      { status: 500 }
-    );
-  }
-}
+  });
 
-// DELETE template (also deletes logos from B2)
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params;
-
-    // Get template to delete logos
+export const DELETE = apiRoute()
+  .params(paramsSchema)
+  .handler(async (_, { params }) => {
     const template = await prisma.template.findUnique({
-      where: { id },
+      where: { id: params.id },
     });
 
     if (!template) {
-      return NextResponse.json(
-        { success: false, error: 'Template not found' },
-        { status: 404 }
-      );
+      return error('Template not found', 404);
     }
 
-    // Delete logos from B2 (don't fail if this errors)
-    await Promise.allSettled([
+    // Delete logos from storage
+    const deleteResults = await Promise.allSettled([
       template.logoHeaderUrl ? deleteTemplateLogo(template.logoHeaderUrl) : Promise.resolve(),
       template.logoFooterUrl ? deleteTemplateLogo(template.logoFooterUrl) : Promise.resolve(),
     ]);
 
-    // Delete from database
-    await prisma.template.delete({
-      where: { id },
+    // Track failed deletions
+    const warnings: string[] = [];
+    const logoTypes = ['header', 'footer'];
+    deleteResults.forEach((result, index) => {
+      if (result.status === 'rejected') {
+        const logoUrl = index === 0 ? template.logoHeaderUrl : template.logoFooterUrl;
+        if (logoUrl) {
+          console.error(`Failed to delete ${logoTypes[index]} logo:`, result.reason);
+          warnings.push(`Le logo ${logoTypes[index]} n'a pas pu être supprimé du stockage`);
+        }
+      }
     });
 
-    return NextResponse.json({
-      success: true,
-      message: 'Template deleted',
+    await prisma.template.delete({
+      where: { id: params.id },
     });
-  } catch (error) {
-    console.error('Error deleting template:', error);
-    return NextResponse.json(
-      { success: false, error: 'Failed to delete template' },
-      { status: 500 }
-    );
-  }
-}
+
+    if (warnings.length > 0) {
+      return success({ message: 'Template deleted', warnings });
+    }
+
+    return success({ message: 'Template deleted' });
+  });

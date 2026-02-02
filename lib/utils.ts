@@ -34,6 +34,37 @@ export function isValidCVFile(filename: string): boolean {
   return validExtensions.includes(getFileExtension(filename));
 }
 
+/**
+ * Magic bytes for CV file validation
+ * PDF: %PDF (25 50 44 46)
+ * DOCX/DOC (Office Open XML): PK (50 4B 03 04) - ZIP format
+ * DOC (OLE2): D0 CF 11 E0
+ */
+const CV_MAGIC_BYTES: Record<string, number[][]> = {
+  pdf: [[0x25, 0x50, 0x44, 0x46]], // %PDF
+  docx: [[0x50, 0x4b, 0x03, 0x04]], // PK (ZIP)
+  doc: [
+    [0x50, 0x4b, 0x03, 0x04], // PK (ZIP) - newer .doc can be OOXML
+    [0xd0, 0xcf, 0x11, 0xe0], // OLE2 compound document
+  ],
+};
+
+/**
+ * Validates that file content matches expected magic bytes for CV files (PDF, DOC, DOCX)
+ */
+export function validateCVMagicBytes(buffer: Buffer, extension: string): boolean {
+  const ext = extension.toLowerCase();
+  const signatures = CV_MAGIC_BYTES[ext];
+
+  if (!signatures) {
+    return false;
+  }
+
+  return signatures.some(magic =>
+    magic.every((byte, i) => buffer[i] === byte)
+  );
+}
+
 export function sanitizeFilename(filename: string): string {
   return filename
     .normalize('NFD')

@@ -1,18 +1,19 @@
-import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { z } from 'zod';
+import { apiRoute, success, error } from '@/lib/api-route';
 
-type RouteParams = Promise<{ id: string }>;
+const paramsSchema = z.object({ id: z.string() });
 
-export async function GET(
-  _request: NextRequest,
-  { params }: { params: RouteParams }
-) {
-  try {
-    const { id } = await params;
+const updateConnectionSchema = z.object({
+  order: z.number().int().optional(),
+  isActive: z.boolean().optional(),
+});
 
+export const GET = apiRoute()
+  .params(paramsSchema)
+  .handler(async (_, { params }) => {
     const connection = await prisma.agentConnection.findUnique({
-      where: { id },
+      where: { id: params.id },
       include: {
         sourceAgent: {
           select: { id: true, name: true, displayName: true, isActive: true },
@@ -24,53 +25,27 @@ export async function GET(
     });
 
     if (!connection) {
-      return NextResponse.json(
-        { success: false, error: 'Connexion introuvable' },
-        { status: 404 }
-      );
+      return error('Connexion introuvable', 404);
     }
 
-    return NextResponse.json({
-      success: true,
-      data: connection,
-    });
-  } catch (error) {
-    console.error('Error fetching connection:', error);
-    return NextResponse.json(
-      { success: false, error: 'Failed to fetch connection' },
-      { status: 500 }
-    );
-  }
-}
+    return success(connection);
+  });
 
-const updateConnectionSchema = z.object({
-  order: z.number().int().optional(),
-  isActive: z.boolean().optional(),
-});
-
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: RouteParams }
-) {
-  try {
-    const { id } = await params;
-    const body = await request.json();
-    const data = updateConnectionSchema.parse(body);
-
+export const PATCH = apiRoute()
+  .params(paramsSchema)
+  .body(updateConnectionSchema)
+  .handler(async (_, { params, body }) => {
     const existing = await prisma.agentConnection.findUnique({
-      where: { id },
+      where: { id: params.id },
     });
 
     if (!existing) {
-      return NextResponse.json(
-        { success: false, error: 'Connexion introuvable' },
-        { status: 404 }
-      );
+      return error('Connexion introuvable', 404);
     }
 
     const connection = await prisma.agentConnection.update({
-      where: { id },
-      data,
+      where: { id: params.id },
+      data: body,
       include: {
         sourceAgent: {
           select: { id: true, name: true, displayName: true, isActive: true },
@@ -81,56 +56,23 @@ export async function PATCH(
       },
     });
 
-    return NextResponse.json({
-      success: true,
-      data: connection,
-    });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { success: false, error: 'Données invalides', details: error.errors },
-        { status: 400 }
-      );
-    }
-    console.error('Error updating connection:', error);
-    return NextResponse.json(
-      { success: false, error: 'Failed to update connection' },
-      { status: 500 }
-    );
-  }
-}
+    return success(connection);
+  });
 
-export async function DELETE(
-  _request: NextRequest,
-  { params }: { params: RouteParams }
-) {
-  try {
-    const { id } = await params;
-
+export const DELETE = apiRoute()
+  .params(paramsSchema)
+  .handler(async (_, { params }) => {
     const existing = await prisma.agentConnection.findUnique({
-      where: { id },
+      where: { id: params.id },
     });
 
     if (!existing) {
-      return NextResponse.json(
-        { success: false, error: 'Connexion introuvable' },
-        { status: 404 }
-      );
+      return error('Connexion introuvable', 404);
     }
 
     await prisma.agentConnection.delete({
-      where: { id },
+      where: { id: params.id },
     });
 
-    return NextResponse.json({
-      success: true,
-      data: { deleted: true },
-    });
-  } catch (error) {
-    console.error('Error deleting connection:', error);
-    return NextResponse.json(
-      { success: false, error: 'Failed to delete connection' },
-      { status: 500 }
-    );
-  }
-}
+    return success({ deleted: true });
+  });

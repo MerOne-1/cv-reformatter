@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { downloadFile, renameFile, getRawCVKey } from '@/lib/b2';
 import { askLLM } from '@/lib/llm';
@@ -6,8 +6,8 @@ import { getAgentPrompts, AgentNotFoundError, AgentInactiveError } from '@/lib/a
 import { detectMissingFields } from '@/lib/types';
 import { getFileExtension, extractConsultantNameFromFilename, generateRawFilename, getContentTypeForExtension } from '@/lib/utils';
 import { z } from 'zod';
+import { apiRoute, error } from '@/lib/api-route';
 
-// Dynamic imports for file parsers
 async function extractTextFromPDF(buffer: Buffer): Promise<string> {
   const pdfParse = (await import('pdf-parse')).default;
   const data = await pdfParse(buffer);
@@ -23,68 +23,61 @@ const extractSchema = z.object({
   cvId: z.string(),
 });
 
-export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json();
-    const { cvId } = extractSchema.parse(body);
+export const POST = apiRoute()
+  .body(extractSchema)
+  .handler(async (_, { body }) => {
+    const { cvId } = body;
 
-    // Get CV from database
     const cv = await prisma.cV.findUnique({
       where: { id: cvId },
     });
 
     if (!cv) {
-      return NextResponse.json(
-        { success: false, error: 'CV not found' },
-        { status: 404 }
-      );
+      return error('CV not found', 404);
     }
 
-    // Download file from B2
     const fileBuffer = await downloadFile(cv.originalKey);
     const extension = getFileExtension(cv.originalName);
 
-    // Extract text based on file type
     let rawText: string;
     if (extension === 'pdf') {
       rawText = await extractTextFromPDF(fileBuffer);
     } else if (extension === 'docx' || extension === 'doc') {
       rawText = await extractTextFromDOCX(fileBuffer);
     } else {
-      return NextResponse.json(
-        { success: false, error: 'Unsupported file format' },
-        { status: 400 }
-      );
+      return error('Unsupported file format', 400);
     }
 
     if (!rawText || rawText.trim().length < 50) {
-      return NextResponse.json(
-        { success: false, error: 'Could not extract text from file' },
-        { status: 400 }
-      );
+      return error('Could not extract text from file', 400);
     }
 
-    // Get extraction prompts from database
-    const { system, user } = await getAgentPrompts('extraction', rawText);
+    let system: string;
+    let user: string;
+    try {
+      const prompts = await getAgentPrompts('extraction', rawText);
+      system = prompts.system;
+      user = prompts.user;
+    } catch (e) {
+      if (e instanceof AgentNotFoundError || e instanceof AgentInactiveError) {
+        return error(e.message, 503);
+      }
+      throw e;
+    }
 
-    // Use LLM to structure the content
     const markdownContent = await askLLM(system, user);
 
-    // Detect missing fields
     const missingFields = detectMissingFields(markdownContent);
 
-    // Extract consultant name from markdown (first H1)
     const nameMatch = markdownContent.match(/^#\s+(.+)$/m);
     const consultantName =
       nameMatch?.[1] || extractConsultantNameFromFilename(cv.originalName);
 
-    // Extract title (first H2 after "Titre professionnel")
     const titleMatch = markdownContent.match(
       /##\s+Titre professionnel\s*\n+(.+)/
     );
     const title = titleMatch?.[1]?.trim() || null;
 
-    // Rename file in B2 with consultant full name
     let newOriginalName = cv.originalName;
     let newOriginalKey = cv.originalKey;
     let renameWarning: string | null = null;
@@ -112,7 +105,6 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Update CV in database
     const updatedCV = await prisma.cV.update({
       where: { id: cvId },
       data: {
@@ -139,28 +131,4 @@ export async function POST(request: NextRequest) {
         status: updatedCV.status,
       },
     });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { success: false, error: 'Invalid request data', details: error.errors },
-        { status: 400 }
-      );
-    }
-
-    if (error instanceof AgentNotFoundError || error instanceof AgentInactiveError) {
-      return NextResponse.json(
-        { success: false, error: error.message },
-        { status: 503 }
-      );
-    }
-
-    console.error('Error extracting CV:', error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: 'Une erreur est survenue lors de l\'extraction du CV. Veuillez réessayer.',
-      },
-      { status: 500 }
-    );
-  }
-}
+  });

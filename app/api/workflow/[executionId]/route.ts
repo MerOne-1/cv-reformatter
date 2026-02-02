@@ -1,18 +1,15 @@
-import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { getAgentExecutionQueue, getWorkflowOrchestrationQueue } from '@/lib/queue';
+import { z } from 'zod';
+import { apiRoute, success, error } from '@/lib/api-route';
 
-type RouteParams = Promise<{ executionId: string }>;
+const paramsSchema = z.object({ executionId: z.string() });
 
-export async function GET(
-  _request: NextRequest,
-  { params }: { params: RouteParams }
-) {
-  try {
-    const { executionId } = await params;
-
+export const GET = apiRoute()
+  .params(paramsSchema)
+  .handler(async (_, { params }) => {
     const execution = await prisma.workflowExecution.findUnique({
-      where: { id: executionId },
+      where: { id: params.executionId },
       include: {
         cv: {
           select: {
@@ -38,10 +35,7 @@ export async function GET(
     });
 
     if (!execution) {
-      return NextResponse.json(
-        { success: false, error: 'Exécution introuvable' },
-        { status: 404 }
-      );
+      return error('Exécution introuvable', 404);
     }
 
     const summary = {
@@ -54,31 +48,14 @@ export async function GET(
       skipped: execution.steps.filter((s) => s.status === 'SKIPPED').length,
     };
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        ...execution,
-        summary,
-      },
-    });
-  } catch (error) {
-    console.error('Error fetching execution:', error);
-    return NextResponse.json(
-      { success: false, error: 'Erreur lors de la récupération' },
-      { status: 500 }
-    );
-  }
-}
+    return success({ ...execution, summary });
+  });
 
-export async function DELETE(
-  _request: NextRequest,
-  { params }: { params: RouteParams }
-) {
-  try {
-    const { executionId } = await params;
-
+export const DELETE = apiRoute()
+  .params(paramsSchema)
+  .handler(async (_, { params }) => {
     const execution = await prisma.workflowExecution.findUnique({
-      where: { id: executionId },
+      where: { id: params.executionId },
       include: {
         steps: {
           select: { jobId: true },
@@ -87,17 +64,11 @@ export async function DELETE(
     });
 
     if (!execution) {
-      return NextResponse.json(
-        { success: false, error: 'Exécution introuvable' },
-        { status: 404 }
-      );
+      return error('Exécution introuvable', 404);
     }
 
     if (execution.status === 'COMPLETED' || execution.status === 'FAILED') {
-      return NextResponse.json(
-        { success: false, error: 'Cette exécution est déjà terminée' },
-        { status: 400 }
-      );
+      return error('Cette exécution est déjà terminée', 400);
     }
 
     const agentQueue = getAgentExecutionQueue();
@@ -107,28 +78,32 @@ export async function DELETE(
       .filter((s) => s.jobId)
       .map((s) => s.jobId!);
 
+    const failedJobRemovals: string[] = [];
+
     for (const jobId of jobsToRemove) {
       try {
         const job = await agentQueue.getJob(jobId);
         if (job) {
           await job.remove();
         }
-      } catch {
-        console.warn(`Could not remove job ${jobId}`);
+      } catch (e) {
+        console.error(`Failed to remove job ${jobId}:`, e);
+        failedJobRemovals.push(jobId);
       }
     }
 
     try {
-      const orchestratorJob = await orchestratorQueue.getJob(`workflow-${executionId}`);
+      const orchestratorJob = await orchestratorQueue.getJob(`workflow-${params.executionId}`);
       if (orchestratorJob) {
         await orchestratorJob.remove();
       }
-    } catch {
-      console.warn(`Could not remove orchestrator job for ${executionId}`);
+    } catch (e) {
+      console.error(`Failed to remove orchestrator job for ${params.executionId}:`, e);
+      failedJobRemovals.push(`orchestrator-${params.executionId}`);
     }
 
     await prisma.workflowExecution.update({
-      where: { id: executionId },
+      where: { id: params.executionId },
       data: {
         status: 'CANCELLED',
         completedAt: new Date(),
@@ -138,7 +113,7 @@ export async function DELETE(
 
     await prisma.workflowStep.updateMany({
       where: {
-        executionId,
+        executionId: params.executionId,
         status: { in: ['PENDING', 'WAITING_INPUTS', 'RUNNING'] },
       },
       data: {
@@ -147,15 +122,12 @@ export async function DELETE(
       },
     });
 
-    return NextResponse.json({
-      success: true,
-      data: { cancelled: true },
-    });
-  } catch (error) {
-    console.error('Error cancelling execution:', error);
-    return NextResponse.json(
-      { success: false, error: 'Erreur lors de l\'annulation' },
-      { status: 500 }
-    );
-  }
-}
+    if (failedJobRemovals.length > 0) {
+      return success({
+        cancelled: true,
+        warnings: failedJobRemovals.map(id => `Failed to remove job: ${id}`),
+      });
+    }
+
+    return success({ cancelled: true });
+  });

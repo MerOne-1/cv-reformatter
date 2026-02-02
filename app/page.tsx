@@ -191,6 +191,29 @@ export default function Home() {
     }
   };
 
+  const handleNotesChange = useCallback(async (notes: string | null) => {
+    if (!selectedCV) return;
+    try {
+      const response = await fetch(`/api/cv/${selectedCV.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notes }),
+      });
+      if (!response.ok) {
+        throw new Error('Failed to save notes');
+      }
+      const data = await response.json();
+      if (data.success) {
+        setSelectedCV(prev => prev ? { ...prev, notes } : prev);
+      } else {
+        throw new Error(data.error || 'Failed to save notes');
+      }
+    } catch (error) {
+      console.error('Error saving notes:', error);
+      throw error;
+    }
+  }, [selectedCV]);
+
   const hasContent = Boolean(markdown && markdown.trim().length > 0);
 
   return (
@@ -241,6 +264,8 @@ export default function Home() {
                 extracting={extracting}
                 generating={generating}
                 uploading={uploading}
+                notes={selectedCV.notes ?? null}
+                onNotesChange={handleNotesChange}
               />
               <CVEditorPanel
                 cv={selectedCV}

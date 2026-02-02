@@ -24,6 +24,9 @@ vi.mock('@/lib/queue', () => ({
 import prisma from '@/lib/db';
 import { POST } from '@/app/api/workflow/execute/route';
 
+// Helper to create context for routes without params
+const emptyContext = { params: Promise.resolve({}) };
+
 describe('Workflow Execute API', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -57,7 +60,7 @@ describe('Workflow Execute API', () => {
         body: JSON.stringify({ cvId: 'cv-1' }),
       });
 
-      const response = await POST(request);
+      const response = await POST(request, emptyContext);
       const data = await response.json();
 
       expect(data.success).toBe(true);
@@ -73,7 +76,7 @@ describe('Workflow Execute API', () => {
         body: JSON.stringify({ cvId: 'cv-not-found' }),
       });
 
-      const response = await POST(request);
+      const response = await POST(request, emptyContext);
       const data = await response.json();
 
       expect(data.success).toBe(false);
@@ -95,7 +98,7 @@ describe('Workflow Execute API', () => {
         body: JSON.stringify({ cvId: 'cv-1' }),
       });
 
-      const response = await POST(request);
+      const response = await POST(request, emptyContext);
       const data = await response.json();
 
       expect(data.success).toBe(false);
@@ -118,7 +121,7 @@ describe('Workflow Execute API', () => {
         body: JSON.stringify({ cvId: 'cv-1' }),
       });
 
-      const response = await POST(request);
+      const response = await POST(request, emptyContext);
       const data = await response.json();
 
       expect(data.success).toBe(false);
@@ -154,7 +157,7 @@ describe('Workflow Execute API', () => {
         }),
       });
 
-      const response = await POST(request);
+      const response = await POST(request, emptyContext);
       const data = await response.json();
 
       expect(data.success).toBe(true);
