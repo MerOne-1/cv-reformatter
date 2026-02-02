@@ -8,8 +8,6 @@ import {
   WorkflowStep,
   ExecutionStatus,
   StepStatus,
-  Comment,
-  User,
 } from '@prisma/client';
 
 export type {
@@ -22,8 +20,6 @@ export type {
   WorkflowStep,
   ExecutionStatus,
   StepStatus,
-  Comment,
-  User,
 };
 
 // Type pour le nom de template (remplace l'ancien enum Brand)
@@ -50,45 +46,6 @@ export interface ExtractedCV {
   title: string;
   markdownContent: string;
   missingFields: string[];
-}
-
-export interface CollaborativeUser {
-  id: string;
-  name: string;
-  color: string;
-  persistedColor?: string;
-}
-
-export interface UserPreferences {
-  highlightColor: string;
-}
-
-export interface CommentWithUser extends Comment {
-  user: {
-    id: string;
-    name: string;
-    highlightColor: string;
-  };
-}
-
-export interface CommentCreate {
-  content: string;
-  cvId: string;
-  startOffset: number;
-  endOffset: number;
-}
-
-export interface CommentUpdate {
-  content?: string;
-  resolved?: boolean;
-  resolvedBy?: string;
-}
-
-export interface WebSocketConfig {
-  url: string;
-  documentId: string;
-  userId: string;
-  userName: string;
 }
 
 export interface ImprovementRequest {

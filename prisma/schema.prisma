@@ -7,63 +7,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ==================== Auth Models (Better Auth) ====================
-
-model User {
-  id            String    @id
-  name          String
-  email         String    @unique
-  emailVerified Boolean   @default(false)
-  image         String?
-  highlightColor String   @default("#3B82F6")
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-
-  sessions      Session[]
-  accounts      Account[]
-  comments      Comment[]
-}
-
-model Session {
-  id        String   @id
-  expiresAt DateTime
-  token     String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  ipAddress String?
-  userAgent String?
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
-
-model Account {
-  id                    String    @id
-  accountId             String
-  providerId            String
-  userId                String
-  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  accessToken           String?
-  refreshToken          String?
-  idToken               String?
-  accessTokenExpiresAt  DateTime?
-  refreshTokenExpiresAt DateTime?
-  scope                 String?
-  password              String?
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
-}
-
-model Verification {
-  id         String   @id
-  identifier String
-  value      String
-  expiresAt  DateTime
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-}
-
-// ==================== Application Models ====================
-
 enum CVStatus {
   PENDING
   EXTRACTED
@@ -108,9 +51,6 @@ model CV {
   // Missing info tracking
   missingFields   String[]  @default([])
 
-  // User notes for contextualization
-  notes           String?   @db.Text
-
   // Status tracking
   status          CVStatus  @default(PENDING)
   templateName    String    @default("DREAMIT")
@@ -130,9 +70,6 @@ model CV {
 
   // Workflow executions
   workflowExecutions WorkflowExecution[]
-
-  // Comments
-  comments        Comment[]
 }
 
 model Improvement {
@@ -280,37 +217,4 @@ model WorkflowStep {
   @@index([executionId])
   @@index([agentId])
   @@index([jobId])
-}
-
-// ==================== Collaboration Models ====================
-
-model Comment {
-  id          String   @id @default(cuid())
-
-  // Content
-  content     String   @db.Text
-
-  // Author
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  // CV reference
-  cvId        String
-  cv          CV       @relation(fields: [cvId], references: [id], onDelete: Cascade)
-
-  // Position in document (character offsets)
-  startOffset Int
-  endOffset   Int
-
-  // Status
-  resolved    Boolean  @default(false)
-  resolvedAt  DateTime?
-  resolvedBy  String?
-
-  // Timestamps
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@index([cvId])
-  @@index([userId])
 }

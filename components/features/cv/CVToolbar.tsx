@@ -9,18 +9,10 @@ import {
   X,
   Code2,
   RefreshCw,
-  StickyNote,
-  ChevronDown,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TemplateSelector } from '@/components/layout/template-selector';
 import { CVWithImprovements } from '@/lib/types';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 
 interface CVToolbarProps {
   cv: CVWithImprovements;
@@ -31,12 +23,10 @@ interface CVToolbarProps {
   onViewModeChange: (mode: 'code' | 'formatted') => void;
   showOriginal: boolean;
   onToggleOriginal: () => void;
-  onExtract: (skipEnrichment?: boolean) => void;
+  onExtract: () => void;
   onGenerate: () => void;
   onUploadFinal: () => void;
   onPreview: () => void;
-  onOpenNotes: () => void;
-  notes: string | null;
   extracting: boolean;
   generating: boolean;
   uploading: boolean;
@@ -55,8 +45,6 @@ export function CVToolbar({
   onGenerate,
   onUploadFinal,
   onPreview,
-  onOpenNotes,
-  notes,
   extracting,
   generating,
   uploading,
@@ -90,43 +78,19 @@ export function CVToolbar({
                 <Columns className="w-4 h-4" />
               )}
             </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8"
-                  disabled={extracting}
-                  title="Régénérer l'extraction IA"
-                >
-                  {extracting ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <RefreshCw className="w-4 h-4" />
-                  )}
-                  <ChevronDown className="w-3 h-3 ml-1" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start">
-                <DropdownMenuItem onClick={() => onExtract(false)}>
-                  <RefreshCw className="w-4 h-4 mr-2" />
-                  Régénération complète
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onExtract(true)}>
-                  <RefreshCw className="w-4 h-4 mr-2 text-muted-foreground" />
-                  Sans enrichissement
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
             <Button
-              variant={notes ? 'secondary' : 'outline'}
-              size="sm"
-              className="h-8"
-              onClick={onOpenNotes}
-              title="Notes de contextualisation"
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              onClick={onExtract}
+              disabled={extracting}
+              title="Régénérer l'extraction IA"
             >
-              <StickyNote className={`w-4 h-4 ${notes ? 'text-amber-500' : ''}`} />
-              {notes && <span className="ml-1 w-1.5 h-1.5 bg-amber-500 rounded-full" />}
+              {extracting ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <RefreshCw className="w-4 h-4" />
+              )}
             </Button>
             <Button
               variant={viewMode === 'formatted' ? 'secondary' : 'outline'}

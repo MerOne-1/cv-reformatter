@@ -6,8 +6,6 @@ services:
     image: postgres:16-alpine
     container_name: cv-reformatter-db
     restart: unless-stopped
-    ports:
-      - "5434:5432"
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
@@ -26,8 +24,6 @@ services:
     image: redis:7-alpine
     container_name: cv-reformatter-redis
     restart: unless-stopped
-    ports:
-      - "6380:6379"
     command: >
       redis-server
       --appendonly yes
@@ -71,10 +67,6 @@ services:
       - B2_BUCKET_CV_FINAL=${B2_BUCKET_CV_FINAL}
       # App
       - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
-      - NEXT_PUBLIC_WEBSOCKET_URL=${NEXT_PUBLIC_WEBSOCKET_URL:-ws://localhost:1234}
-      # Auth
-      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
-      - BETTER_AUTH_BASE_URL=${BETTER_AUTH_BASE_URL:-http://localhost:3000}
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000/api/health"]
       interval: 30s
@@ -119,32 +111,6 @@ services:
         limits:
           cpus: '1'
           memory: 512M
-
-  websocket:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.websocket
-    container_name: cv-reformatter-websocket
-    restart: unless-stopped
-    ports:
-      - "${WEBSOCKET_PORT:-1234}:1234"
-    environment:
-      - NODE_ENV=production
-      - WEBSOCKET_PORT=1234
-      - HEALTH_PORT=3002
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
-    depends_on:
-      redis:
-        condition: service_healthy
-    networks:
-      - cv-network
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 256M
 
 volumes:
   postgres_data:

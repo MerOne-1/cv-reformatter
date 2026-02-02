@@ -12,7 +12,6 @@ const updateSchema = z.object({
     .optional(),
   consultantName: z.string().optional(),
   title: z.string().optional(),
-  notes: z.string().nullable().optional(),
 });
 
 export async function GET(

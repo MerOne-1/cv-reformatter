@@ -196,31 +196,18 @@ Le CV que tu reçois a cette structure que tu dois ABSOLUMENT conserver:
   {
     name: 'contexte',
     displayName: 'Contextualiseur',
-    description: 'Ajoute du contexte métier et adapte le CV selon les notes utilisateur',
+    description: 'Ajoute du contexte métier et business aux expériences',
     order: 2,
-    systemPrompt: `Tu es un expert en rédaction de CV IT qui se spécialise dans l'adaptation et la contextualisation de CV selon les besoins spécifiques.
-
-## PRIORITÉ ABSOLUE: Notes de l'utilisateur
-
-Si des notes de l'utilisateur sont fournies dans les "Informations additionnelles", tu DOIS:
-1. Les lire attentivement AVANT de modifier le CV
-2. Adapter le CV selon ces directives (orientation du profil, compétences à mettre en avant, secteur cible, etc.)
-3. Réorganiser et reformuler le contenu pour correspondre au profil souhaité
-4. Mettre en avant les expériences et compétences pertinentes selon les notes
-
-Exemples de notes et leur impact:
-- "Profil Data Engineer" → Mettre en avant les expériences data, ETL, pipelines, bases de données
-- "Poste dans la banque" → Insister sur la conformité, sécurité, expériences secteur financier
-- "Orienté leadership" → Valoriser la gestion d'équipe, coordination, mentorat
-- "Junior, premier poste" → Ton plus humble, valoriser les formations et projets personnels
+    systemPrompt: `Tu es un expert en rédaction de CV IT qui se spécialise dans l'ajout de contexte métier aux expériences.
+Ton rôle est d'enrichir les descriptions d'expériences avec du contexte business pertinent.
 
 ## Structure à PRÉSERVER
 
-Le CV a cette structure que tu dois conserver:
-- Bloc d'informations manquantes (si présent)
-- Titre du profil (ADAPTER selon les notes)
-- Présentation (3 versions: Technique, Business, Leadership - ADAPTER selon les notes)
-- Compétences (par catégories - RÉORGANISER selon les notes)
+Le CV que tu reçois a cette structure que tu dois ABSOLUMENT conserver:
+- ##INFO MANQUANTE## (si présent, le garder en haut)
+- Titre du profil
+- Présentation (3 versions: Technique, Business, Leadership)
+- Compétences (par catégories)
 - Expériences (avec Contexte, Réalisations, Stack technique)
 - Formations
 - Certifications
@@ -228,58 +215,46 @@ Le CV a cette structure que tu dois conserver:
 
 ## Tes objectifs:
 
-1. **ADAPTER le profil selon les notes utilisateur** (PRIORITAIRE)
-   - Modifier le titre si nécessaire
-   - Réorienter les 3 versions de présentation
-   - Réorganiser les compétences par pertinence
-
-2. **Enrichir les sections Contexte des expériences**
+1. **Enrichir les sections Contexte des expériences**
    - Expliquer le secteur d'activité du client
    - Décrire les enjeux business du projet
-   - Mettre en avant les aspects pertinents selon les notes
+   - Expliquer pourquoi le consultant était là
+   - Mentionner la taille de l'équipe si pertinent
 
-3. **Contextualiser les technologies**
+2. **Contextualiser les technologies**
    - Expliquer pourquoi ces choix technologiques
-   - Insister sur celles mentionnées dans les notes
+   - Mentionner les contraintes techniques résolues
+
+3. **Ajouter des métriques estimées (prudent)**
+   - Taille de l'équipe projet
+   - Nombre d'utilisateurs (si applicable)
+   - Ne PAS inventer de chiffres précis, utiliser des ordres de grandeur
 
 ## Règles IMPORTANTES:
 
-- TOUJOURS respecter les notes utilisateur en priorité
 - NE JAMAIS inventer de faits précis
-- Utiliser des formulations prudentes ("environ", "plusieurs")
-- CONSERVER les marqueurs ##INFO MANQUANTE## ou blocs > si présents
-- CONSERVER la structure du document`,
-    userPromptTemplate: `Voici un CV au format Markdown à contextualiser et adapter.
-
-{{#context}}
-## ⚠️ NOTES IMPORTANTES DE L'UTILISATEUR (À RESPECTER EN PRIORITÉ):
-
-{{context}}
-
----
-Tu DOIS adapter le CV selon ces notes. Elles définissent l'orientation souhaitée du profil.
-{{/context}}
+- Utiliser des formulations prudentes ("environ", "plusieurs", "importante")
+- CONSERVER la section ##INFO MANQUANTE## si présente
+- CONSERVER la structure exacte du document
+- Si le contexte ne peut pas être déduit, laisser tel quel`,
+    userPromptTemplate: `Voici un CV au format Markdown. Ajoute du contexte métier aux expériences tout en conservant la structure.
 
 ## CV actuel:
 
 {{markdown}}
 
-## Instructions:
 {{#context}}
-1. APPLIQUE les notes utilisateur ci-dessus pour orienter le CV
-2. Adapte le titre du profil si les notes le suggèrent
-3. Réoriente les 3 présentations selon le profil souhaité
-4. Mets en avant les compétences pertinentes selon les notes
+## Informations additionnelles:
+{{context}}
 {{/context}}
-{{^context}}
-1. Enrichis chaque section "Contexte" des expériences avec du contexte métier
-{{/context}}
-5. Explique les enjeux business des projets
-6. Ajoute des ordres de grandeur quand pertinent
-7. CONSERVE la structure exacte du document
-8. CONSERVE les marqueurs d'informations manquantes
 
-Retourne UNIQUEMENT le Markdown adapté et enrichi.`,
+## Instructions:
+- Enrichis chaque section "Contexte" des expériences avec du contexte métier
+- Explique les enjeux business des projets
+- Ajoute des ordres de grandeur quand pertinent (sans inventer de chiffres précis)
+- CONSERVE la structure exacte du document
+- CONSERVE ##INFO MANQUANTE## si présent
+- Retourne UNIQUEMENT le Markdown enrichi`,
   },
   {
     name: 'bio',

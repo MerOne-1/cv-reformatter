@@ -21,13 +21,12 @@ async function extractTextFromDOCX(buffer: Buffer): Promise<string> {
 
 const extractSchema = z.object({
   cvId: z.string(),
-  skipEnrichment: z.boolean().optional().default(false),
 });
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { cvId, skipEnrichment } = extractSchema.parse(body);
+    const { cvId } = extractSchema.parse(body);
 
     // Get CV from database
     const cv = await prisma.cV.findUnique({
@@ -113,54 +112,14 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Start with extracted content
-    let finalMarkdown = markdownContent;
-    let finalMissingFields = missingFields;
-    const appliedAgents: string[] = ['extraction'];
-
-    // Step 2: Apply enrichisseur (if not skipped)
-    if (!skipEnrichment) {
-      try {
-        const { system: enrichSystem, user: enrichUser } = await getAgentPrompts(
-          'enrichisseur',
-          finalMarkdown
-        );
-        finalMarkdown = await askLLM(enrichSystem, enrichUser);
-        finalMissingFields = detectMissingFields(finalMarkdown);
-        appliedAgents.push('enrichisseur');
-      } catch (err) {
-        console.warn('Enrichisseur agent skipped:', err instanceof Error ? err.message : err);
-      }
-    }
-
-    // Step 3: Apply contextualiseur with notes
-    try {
-      // Build context with user notes
-      let contextForAgent: string | undefined;
-      if (cv.notes) {
-        contextForAgent = `--- Notes de l'utilisateur ---\n${cv.notes}\n---`;
-      }
-
-      const { system: ctxSystem, user: ctxUser } = await getAgentPrompts(
-        'contexte',
-        finalMarkdown,
-        contextForAgent
-      );
-      finalMarkdown = await askLLM(ctxSystem, ctxUser);
-      finalMissingFields = detectMissingFields(finalMarkdown);
-      appliedAgents.push('contexte');
-    } catch (err) {
-      console.warn('Contexte agent skipped:', err instanceof Error ? err.message : err);
-    }
-
     // Update CV in database
     const updatedCV = await prisma.cV.update({
       where: { id: cvId },
       data: {
-        markdownContent: finalMarkdown,
+        markdownContent,
         consultantName,
         title,
-        missingFields: finalMissingFields,
+        missingFields,
         originalName: newOriginalName,
         originalKey: newOriginalKey,
         status: 'EXTRACTED',
@@ -171,8 +130,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       warning: renameWarning,
-      skipEnrichment,
-      appliedAgents,
       data: {
         id: updatedCV.id,
         markdownContent: updatedCV.markdownContent,

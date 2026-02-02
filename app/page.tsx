@@ -9,7 +9,6 @@ import { CVEditorPanel } from '@/components/features/cv/CVEditorPanel';
 import { CVListItem, CVWithImprovements } from '@/lib/types';
 import { useDebouncedSave } from '@/hooks';
 import { FileText, Loader2 } from 'lucide-react';
-import { CVNotesDialog } from '@/components/features/cv/cv-notes-dialog';
 
 interface Template {
   id: string;
@@ -37,8 +36,6 @@ export default function Home() {
   const [showOriginal, setShowOriginal] = useState(false);
   const [viewMode, setViewMode] = useState<'code' | 'formatted'>('code');
   const [templates, setTemplates] = useState<Template[]>([]);
-  const [showNotesDialog, setShowNotesDialog] = useState(false);
-  const [notes, setNotes] = useState<string | null>(null);
 
   // Fetch templates
   const fetchTemplates = useCallback(() => {
@@ -66,7 +63,6 @@ export default function Home() {
     if (selectedCV) {
       setMarkdown(selectedCV.markdownContent || '');
       setTemplateName(selectedCV.templateName);
-      setNotes(selectedCV.notes || null);
     }
   }, [selectedCV]);
 
@@ -116,14 +112,14 @@ export default function Home() {
     setRefreshKey((k) => k + 1);
   }, []);
 
-  const handleExtract = async (skipEnrichment = false) => {
+  const handleExtract = async () => {
     if (!selectedCV) return;
     try {
       setExtracting(true);
       const response = await fetch('/api/cv/extract', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cvId: selectedCV.id, skipEnrichment }),
+        body: JSON.stringify({ cvId: selectedCV.id }),
       });
       const data = await response.json();
       if (data.success) {
@@ -135,25 +131,6 @@ export default function Home() {
       console.error('Error extracting:', error);
     } finally {
       setExtracting(false);
-    }
-  };
-
-  const handleSaveNotes = async (newNotes: string) => {
-    if (!selectedCV) return;
-    try {
-      const response = await fetch(`/api/cv/${selectedCV.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ notes: newNotes || null }),
-      });
-      const data = await response.json();
-      if (data.success) {
-        setNotes(newNotes || null);
-        setSelectedCV({ ...selectedCV, notes: newNotes || null });
-      }
-    } catch (error) {
-      console.error('Error saving notes:', error);
-      throw error;
     }
   };
 
@@ -261,8 +238,6 @@ export default function Home() {
                 onGenerate={handleGenerate}
                 onUploadFinal={handleUploadFinal}
                 onPreview={() => setPreviewOpen(true)}
-                onOpenNotes={() => setShowNotesDialog(true)}
-                notes={notes}
                 extracting={extracting}
                 generating={generating}
                 uploading={uploading}
@@ -307,12 +282,6 @@ export default function Home() {
         consultantName={selectedCV?.consultantName || ''}
       />
 
-      <CVNotesDialog
-        open={showNotesDialog}
-        onOpenChange={setShowNotesDialog}
-        notes={notes}
-        onSave={handleSaveNotes}
-      />
-    </div>
+      </div>
   );
 }
