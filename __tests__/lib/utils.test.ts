@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   cn,
   formatDate,
@@ -11,6 +11,9 @@ import {
   generateRawFilename,
   getInitials,
   getContentTypeForExtension,
+  validateCVMagicBytes,
+  sleep,
+  retryWithBackoff,
 } from '@/lib/utils';
 
 describe('cn', () => {
@@ -199,5 +202,123 @@ describe('getContentTypeForExtension', () => {
 
   it('should return octet-stream for unknown extensions', () => {
     expect(getContentTypeForExtension('xyz')).toBe('application/octet-stream');
+  });
+});
+
+describe('formatDateTime', () => {
+  it('should format date and time in French format', () => {
+    const date = new Date('2024-01-15T14:30:00');
+    const result = formatDateTime(date);
+    expect(result).toMatch(/15\/01\/2024/);
+    expect(result).toMatch(/14:30/);
+  });
+
+  it('should handle string dates', () => {
+    const result = formatDateTime('2024-06-20T09:15:00');
+    expect(result).toMatch(/20\/06\/2024/);
+  });
+});
+
+describe('validateCVMagicBytes', () => {
+  it('should validate PDF magic bytes', () => {
+    const pdfBuffer = Buffer.from([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x34]); // %PDF-1.4
+    expect(validateCVMagicBytes(pdfBuffer, 'pdf')).toBe(true);
+  });
+
+  it('should validate DOCX magic bytes (ZIP format)', () => {
+    const docxBuffer = Buffer.from([0x50, 0x4b, 0x03, 0x04, 0x14, 0x00, 0x06, 0x00]); // PK..
+    expect(validateCVMagicBytes(docxBuffer, 'docx')).toBe(true);
+  });
+
+  it('should validate DOC magic bytes (OLE2 format)', () => {
+    const docBuffer = Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]); // OLE2
+    expect(validateCVMagicBytes(docBuffer, 'doc')).toBe(true);
+  });
+
+  it('should validate DOC with ZIP format (newer)', () => {
+    const docZipBuffer = Buffer.from([0x50, 0x4b, 0x03, 0x04, 0x14, 0x00, 0x06, 0x00]);
+    expect(validateCVMagicBytes(docZipBuffer, 'doc')).toBe(true);
+  });
+
+  it('should reject invalid magic bytes for PDF', () => {
+    const invalidBuffer = Buffer.from([0x00, 0x00, 0x00, 0x00]);
+    expect(validateCVMagicBytes(invalidBuffer, 'pdf')).toBe(false);
+  });
+
+  it('should reject invalid magic bytes for DOCX', () => {
+    const invalidBuffer = Buffer.from([0x25, 0x50, 0x44, 0x46]); // PDF magic in DOCX
+    expect(validateCVMagicBytes(invalidBuffer, 'docx')).toBe(false);
+  });
+
+  it('should return false for unsupported extension', () => {
+    const buffer = Buffer.from([0x25, 0x50, 0x44, 0x46]);
+    expect(validateCVMagicBytes(buffer, 'txt')).toBe(false);
+    expect(validateCVMagicBytes(buffer, 'exe')).toBe(false);
+  });
+
+  it('should handle buffer smaller than magic bytes', () => {
+    const tinyBuffer = Buffer.from([0x25, 0x50]);
+    expect(validateCVMagicBytes(tinyBuffer, 'pdf')).toBe(false);
+  });
+
+  it('should handle empty buffer', () => {
+    const emptyBuffer = Buffer.from([]);
+    expect(validateCVMagicBytes(emptyBuffer, 'pdf')).toBe(false);
+  });
+
+  it('should be case-insensitive for extension', () => {
+    const pdfBuffer = Buffer.from([0x25, 0x50, 0x44, 0x46]);
+    expect(validateCVMagicBytes(pdfBuffer, 'PDF')).toBe(true);
+    expect(validateCVMagicBytes(pdfBuffer, 'Pdf')).toBe(true);
+  });
+});
+
+describe('sleep', () => {
+  it('should resolve after specified delay', async () => {
+    const start = Date.now();
+    await sleep(50);
+    const elapsed = Date.now() - start;
+    expect(elapsed).toBeGreaterThanOrEqual(40); // Allow some tolerance
+  });
+
+  it('should be a promise that resolves to undefined', async () => {
+    const result = await sleep(10);
+    expect(result).toBeUndefined();
+  });
+});
+
+describe('retryWithBackoff', () => {
+  it('should return result on immediate success', async () => {
+    const fn = vi.fn().mockResolvedValue('success');
+
+    const result = await retryWithBackoff(fn, 3, 10);
+
+    expect(result).toBe('success');
+    expect(fn).toHaveBeenCalledTimes(1);
+  });
+
+  it('should retry on failure and eventually succeed', async () => {
+    const fn = vi.fn()
+      .mockRejectedValueOnce(new Error('Fail 1'))
+      .mockResolvedValue('success');
+
+    const result = await retryWithBackoff(fn, 3, 10);
+
+    expect(result).toBe('success');
+    expect(fn).toHaveBeenCalledTimes(2);
+  });
+
+  it('should throw after max retries exhausted', async () => {
+    const fn = vi.fn().mockRejectedValue(new Error('Always fails'));
+
+    await expect(retryWithBackoff(fn, 2, 10)).rejects.toThrow('Always fails');
+    expect(fn).toHaveBeenCalledTimes(2);
+  });
+
+  it('should retry the specified number of times', async () => {
+    const fn = vi.fn().mockRejectedValue(new Error('Fail'));
+
+    await expect(retryWithBackoff(fn, 3, 10)).rejects.toThrow('Fail');
+    expect(fn).toHaveBeenCalledTimes(3);
   });
 });

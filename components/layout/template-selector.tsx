@@ -2,16 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
+import { TemplateSelectItem } from '@/lib/types';
 import { Loader2 } from 'lucide-react';
-
-interface Template {
-  id: string;
-  name: string;
-  displayName: string;
-  primaryColor: string;
-  secondaryColor: string;
-  isActive: boolean;
-}
 
 interface TemplateSelectorProps {
   value: string;
@@ -20,7 +12,7 @@ interface TemplateSelectorProps {
 }
 
 export function TemplateSelector({ value, onChange, disabled }: TemplateSelectorProps) {
-  const [templates, setTemplates] = useState<Template[]>([]);
+  const [templates, setTemplates] = useState<TemplateSelectItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -28,7 +20,7 @@ export function TemplateSelector({ value, onChange, disabled }: TemplateSelector
       .then(res => res.json())
       .then(data => {
         if (data.success) {
-          setTemplates(data.data.filter((t: Template) => t.isActive));
+          setTemplates(data.data.filter((t: TemplateSelectItem) => t.isActive));
         }
       })
       .catch(console.error)
@@ -108,7 +100,7 @@ export function TemplateSelector({ value, onChange, disabled }: TemplateSelector
 }
 
 export function useTemplates() {
-  const [templates, setTemplates] = useState<Template[]>([]);
+  const [templates, setTemplates] = useState<TemplateSelectItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   const refetch = () => {

@@ -65,13 +65,51 @@ export function validateCVMagicBytes(buffer: Buffer, extension: string): boolean
   );
 }
 
-export function sanitizeFilename(filename: string): string {
-  return filename
+/**
+ * Options for sanitizeName function
+ */
+interface SanitizeNameOptions {
+  /** Allow dots in the name (default: false) */
+  allowDots?: boolean;
+  /** Allow dashes in the name (default: true) */
+  allowDashes?: boolean;
+  /** Allow spaces in the name - will be replaced with underscores if false (default: false) */
+  allowSpaces?: boolean;
+}
+
+/**
+ * Sanitizes a name by removing accents and special characters.
+ * Common function used for filenames, folder names, and identifiers.
+ *
+ * @param name - The name to sanitize
+ * @param options - Customization options
+ * @returns Sanitized name with only alphanumeric characters and allowed symbols
+ */
+export function sanitizeName(name: string, options: SanitizeNameOptions = {}): string {
+  const { allowDots = false, allowDashes = true, allowSpaces = false } = options;
+
+  // Build allowed characters regex
+  let allowedChars = 'a-zA-Z0-9_';
+  if (allowDots) allowedChars += '.';
+  if (allowDashes) allowedChars += '-';
+  if (allowSpaces) allowedChars += '\\s';
+
+  const disallowedRegex = new RegExp(`[^${allowedChars}]`, 'g');
+
+  return name
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-zA-Z0-9.-]/g, '_')
-    .replace(/_+/g, '_')
-    .replace(/^_|_$/g, '');
+    .replace(/[\u0300-\u036f]/g, '')  // Remove accents
+    .replace(disallowedRegex, '_')     // Replace disallowed chars with underscore
+    .replace(/_+/g, '_')               // Remove consecutive underscores
+    .replace(/^_|_$/g, '')             // Remove leading/trailing underscores
+    .trim();
+}
+
+/**
+ * @deprecated Use sanitizeName with options { allowDots: true, allowDashes: false }
+ */
+export function sanitizeFilename(filename: string): string {
+  return sanitizeName(filename, { allowDots: true, allowDashes: false });
 }
 
 const VALID_EXTENSIONS = ['pdf', 'docx', 'doc'];
@@ -81,13 +119,8 @@ export function generateRawFilename(consultantName: string, extension: string): 
     throw new Error(`Invalid file extension: "${extension}". Must be one of: ${VALID_EXTENSIONS.join(', ')}`);
   }
 
-  const sanitized = consultantName
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-zA-Z0-9\s]/g, '_')
-    .replace(/\s+/g, '_')
-    .replace(/_+/g, '_')
-    .replace(/^_|_$/g, '');
+  // Use sanitizeName - spaces become underscores via the default replacement
+  const sanitized = sanitizeName(consultantName, { allowDashes: false });
 
   if (!sanitized) {
     throw new Error(`Invalid consultant name for filename generation: "${consultantName}" sanitized to empty string`);

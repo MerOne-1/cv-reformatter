@@ -31,12 +31,53 @@ export type {
 // Type pour le nom de template (remplace l'ancien enum Brand)
 export type TemplateName = string;
 
+/**
+ * Template list item - used in UI components for displaying templates
+ * This is a subset of the full Template model from Prisma
+ */
+export interface TemplateListItem {
+  id: string;
+  name: string;
+  displayName: string;
+  primaryColor: string;
+  secondaryColor: string;
+  logoUrl: string | null;
+  logoHeaderUrl: string | null;
+  logoFooterUrl: string | null;
+  website: string | null;
+  config: string;
+  isActive: boolean;
+}
+
+/**
+ * Minimal template info for selectors (lighter payload)
+ */
+export interface TemplateSelectItem {
+  id: string;
+  name: string;
+  displayName: string;
+  primaryColor: string;
+  secondaryColor: string;
+  isActive: boolean;
+}
+
 export interface CVWithImprovements extends CV {
   improvements: Improvement[];
 }
 
+export interface ActiveWorkflow {
+  id: string;
+  status: 'PENDING' | 'RUNNING';
+  startedAt: Date;
+  progress: {
+    completed: number;
+    total: number;
+  };
+}
+
 export interface CVWithImprovementsAndAudio extends CVWithImprovements {
   audioNotes: AudioNote[];
+  activeWorkflow: ActiveWorkflow | null;
 }
 
 export interface CVListItem {
@@ -49,6 +90,7 @@ export interface CVListItem {
   createdAt: Date;
   updatedAt: Date;
   hasMissingFields: boolean;
+  hasActiveWorkflow?: boolean;
 }
 
 export interface ExtractedCV {

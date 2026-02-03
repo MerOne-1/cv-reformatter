@@ -1,27 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X, Palette, Check, Loader2 } from 'lucide-react';
+import { X, Check, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-
-interface Template {
-  id: string;
-  name: string;
-  displayName: string;
-  primaryColor: string;
-  secondaryColor: string;
-  logoUrl: string | null;
-  logoHeaderUrl: string | null;
-  logoFooterUrl: string | null;
-  website: string | null;
-  config: string;
-  isActive: boolean;
-}
+import { TemplateListItem } from '@/lib/types';
 
 interface TemplateEditModalProps {
-  template: Template | null;
+  template: TemplateListItem | null;
   onClose: () => void;
-  onSave: (templateId: string, updates: Partial<Template>) => Promise<void>;
+  onSave: (templateId: string, updates: Partial<TemplateListItem>) => Promise<void>;
   saving: boolean;
 }
 

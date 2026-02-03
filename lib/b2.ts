@@ -7,6 +7,7 @@ import {
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { B2File } from './types';
+import { sanitizeName } from './utils';
 
 const s3Client = new S3Client({
   endpoint: process.env.B2_ENDPOINT,
@@ -112,16 +113,10 @@ export async function uploadAudio(
   buffer: Buffer,
   mimeType: string
 ): Promise<{ key: string; url: string }> {
-  // Sanitize consultant name for folder path
-  const sanitizedName = consultantName
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '') // Remove accents
-    .replace(/[^a-zA-Z0-9_-]/g, '_') // Replace special chars with underscore
-    .replace(/_+/g, '_') // Remove consecutive underscores
-    .trim();
+  // Sanitize consultant name for folder path (allow dashes for readability)
+  const sanitizedName = sanitizeName(consultantName, { allowDashes: true });
 
   const timestamp = Date.now();
-  const ext = filename.split('.').pop() || 'audio';
   const key = `${AUDIO_PREFIX}/${sanitizedName}/${timestamp}_${filename}`;
 
   const url = await uploadFile(key, buffer, mimeType);
@@ -130,13 +125,7 @@ export async function uploadAudio(
 }
 
 export function getAudioKey(consultantName: string, filename: string): string {
-  const sanitizedName = consultantName
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-zA-Z0-9_-]/g, '_')
-    .replace(/_+/g, '_')
-    .trim();
-
+  const sanitizedName = sanitizeName(consultantName, { allowDashes: true });
   return `${AUDIO_PREFIX}/${sanitizedName}/${filename}`;
 }
 

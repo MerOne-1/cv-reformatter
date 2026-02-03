@@ -12,7 +12,7 @@ import { WorkflowEditor } from '@/components/features/agents/workflow-editor';
 import { ThemeToggle } from '@/components/layout/theme-toggle';
 import { TemplateCreateModal } from '@/components/features/templates/template-create-modal';
 import { TemplateEditModal } from '@/components/features/templates/template-edit-modal';
-import { AIAgent } from '@/lib/types';
+import { AIAgent, TemplateListItem } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import {
   ArrowLeft,
@@ -30,22 +30,8 @@ import {
   Pencil,
 } from 'lucide-react';
 
-interface Template {
-  id: string;
-  name: string;
-  displayName: string;
-  primaryColor: string;
-  secondaryColor: string;
-  logoUrl: string | null; // Legacy - utilisez logoHeaderUrl/logoFooterUrl
-  logoHeaderUrl: string | null;
-  logoFooterUrl: string | null;
-  website: string | null;
-  config: string;
-  isActive: boolean;
-}
-
 export default function SettingsPage() {
-  const [templates, setTemplates] = useState<Template[]>([]);
+  const [templates, setTemplates] = useState<TemplateListItem[]>([]);
   const [agents, setAgents] = useState<AIAgent[]>([]);
   const [loading, setLoading] = useState(true);
   const [agentsLoading, setAgentsLoading] = useState(true);
@@ -57,7 +43,7 @@ export default function SettingsPage() {
   const [uploadingLogoId, setUploadingLogoId] = useState<string | null>(null);
   const [templateModalOpen, setTemplateModalOpen] = useState(false);
   const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null);
-  const [editModalTemplate, setEditModalTemplate] = useState<Template | null>(null);
+  const [editModalTemplate, setEditModalTemplate] = useState<TemplateListItem | null>(null);
 
   // Refs for file inputs
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
@@ -95,11 +81,11 @@ export default function SettingsPage() {
     }
   };
 
-  const handleEditTemplate = (template: Template) => {
+  const handleEditTemplate = (template: TemplateListItem) => {
     setEditModalTemplate(template);
   };
 
-  const handleSaveTemplate = async (templateId: string, updates: Partial<Template>) => {
+  const handleSaveTemplate = async (templateId: string, updates: Partial<TemplateListItem>) => {
     try {
       setSaving(true);
       const response = await fetch(`/api/templates/${templateId}`, {
@@ -175,7 +161,7 @@ export default function SettingsPage() {
   };
 
 
-  const isIncomplete = (template: Template) => {
+  const isIncomplete = (template: TemplateListItem) => {
     try {
       const config = JSON.parse(template.config);
       return config.incomplete === true;
@@ -243,7 +229,7 @@ export default function SettingsPage() {
     fileInputRefs.current[templateId]?.click();
   };
 
-  const handleDeleteTemplate = async (template: Template) => {
+  const handleDeleteTemplate = async (template: TemplateListItem) => {
     if (!confirm(`Supprimer le template "${template.displayName}" ? Cette action est irréversible.`)) {
       return;
     }
