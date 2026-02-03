@@ -17,7 +17,8 @@
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
     "db:seed": "tsx prisma/seed.ts",
-    "setup:b2": "tsx scripts/setup-b2.ts"
+    "setup:b2": "tsx scripts/setup-b2.ts",
+    "worker": "tsx scripts/worker-entrypoint.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.723.0",
@@ -38,9 +39,11 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "docx": "^9.2.0",
+    "dotenv": "^17.2.3",
     "ioredis": "^5.9.2",
     "lucide-react": "^0.469.0",
     "next": "^15.5.11",
+    "next-zod-route": "^0.2.6",
     "officeparser": "^5.1.1",
     "pdf-parse": "^1.1.1",
     "react": "^19.0.0",

@@ -20,6 +20,7 @@ const s3Client = new S3Client({
 const BUCKET_NAME = process.env.B2_BUCKET_NAME || 'cv-uploads';
 const CV_RAW_PREFIX = process.env.B2_BUCKET_CV_RAW || 'cv-raw';
 const CV_FINAL_PREFIX = process.env.B2_BUCKET_CV_FINAL || 'cv-final';
+const AUDIO_PREFIX = 'audio';
 
 export async function listRawCVs(): Promise<B2File[]> {
   const command = new ListObjectsV2Command({
@@ -98,6 +99,47 @@ export async function uploadFinalCV(
   return { key, url };
 }
 
+/**
+ * Upload an audio file for a CV
+ * @param consultantName - Name of the consultant (for folder organization)
+ * @param filename - Original filename
+ * @param buffer - Audio file buffer
+ * @param mimeType - MIME type (audio/ogg, audio/mp4, etc.)
+ */
+export async function uploadAudio(
+  consultantName: string,
+  filename: string,
+  buffer: Buffer,
+  mimeType: string
+): Promise<{ key: string; url: string }> {
+  // Sanitize consultant name for folder path
+  const sanitizedName = consultantName
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // Remove accents
+    .replace(/[^a-zA-Z0-9_-]/g, '_') // Replace special chars with underscore
+    .replace(/_+/g, '_') // Remove consecutive underscores
+    .trim();
+
+  const timestamp = Date.now();
+  const ext = filename.split('.').pop() || 'audio';
+  const key = `${AUDIO_PREFIX}/${sanitizedName}/${timestamp}_${filename}`;
+
+  const url = await uploadFile(key, buffer, mimeType);
+
+  return { key, url };
+}
+
+export function getAudioKey(consultantName: string, filename: string): string {
+  const sanitizedName = consultantName
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9_-]/g, '_')
+    .replace(/_+/g, '_')
+    .trim();
+
+  return `${AUDIO_PREFIX}/${sanitizedName}/${filename}`;
+}
+
 export async function getSignedDownloadUrl(key: string, expiresIn = 3600): Promise<string> {
   const command = new GetObjectCommand({
     Bucket: BUCKET_NAME,
@@ -151,4 +193,4 @@ export function getFinalCVKey(filename: string): string {
   return `${CV_FINAL_PREFIX}/${filename}`;
 }
 
-export { s3Client, BUCKET_NAME, CV_RAW_PREFIX, CV_FINAL_PREFIX };
+export { s3Client, BUCKET_NAME, CV_RAW_PREFIX, CV_FINAL_PREFIX, AUDIO_PREFIX };

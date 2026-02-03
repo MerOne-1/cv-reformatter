@@ -1,9 +1,12 @@
+import 'dotenv/config';
 import http from 'http';
 import {
   startAgentWorker,
   stopAgentWorker,
   startOrchestratorWorker,
   stopOrchestratorWorker,
+  startAudioTranscriptionWorker,
+  stopAudioTranscriptionWorker,
   getAgentQueueEvents,
   getOrchestratorQueueEvents,
   closeQueueEvents,
@@ -26,6 +29,9 @@ async function startWorkers() {
 
     startOrchestratorWorker();
     console.log('✓ Orchestrator worker started');
+
+    startAudioTranscriptionWorker();
+    console.log('✓ Audio transcription worker started');
 
     getAgentQueueEvents();
     console.log('✓ Agent queue events listener started');
@@ -54,6 +60,9 @@ async function stopWorkers() {
 
     await stopOrchestratorWorker();
     console.log('✓ Orchestrator worker stopped');
+
+    await stopAudioTranscriptionWorker();
+    console.log('✓ Audio transcription worker stopped');
 
     await closeQueueEvents();
     console.log('✓ Queue events closed');

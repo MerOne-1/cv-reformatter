@@ -19,6 +19,7 @@ const defaultJobOptions: QueueOptions['defaultJobOptions'] = {
 
 let agentExecutionQueue: Queue | null = null;
 let workflowOrchestrationQueue: Queue | null = null;
+let audioTranscriptionQueue: Queue | null = null;
 
 export function getAgentExecutionQueue(): Queue {
   if (!agentExecutionQueue) {
@@ -43,17 +44,36 @@ export function getWorkflowOrchestrationQueue(): Queue {
   return workflowOrchestrationQueue;
 }
 
+export function getAudioTranscriptionQueue(): Queue {
+  if (!audioTranscriptionQueue) {
+    audioTranscriptionQueue = new Queue('audio-transcription', {
+      connection: getRedisConnection(),
+      defaultJobOptions: {
+        ...defaultJobOptions,
+        attempts: 2, // Retry once on failure
+        backoff: {
+          type: 'exponential',
+          delay: 5000, // 5 seconds initial delay
+        },
+      },
+    });
+  }
+  return audioTranscriptionQueue;
+}
+
 export async function closeQueues(): Promise<void> {
-  const queues = [agentExecutionQueue, workflowOrchestrationQueue];
+  const queues = [agentExecutionQueue, workflowOrchestrationQueue, audioTranscriptionQueue];
   await Promise.all(
     queues.filter(Boolean).map((q) => q!.close())
   );
   agentExecutionQueue = null;
   workflowOrchestrationQueue = null;
+  audioTranscriptionQueue = null;
   console.log('All queues closed');
 }
 
 export const QUEUE_NAMES = {
   AGENT_EXECUTION: 'agent-execution',
   WORKFLOW_ORCHESTRATION: 'workflow-orchestration',
+  AUDIO_TRANSCRIPTION: 'audio-transcription',
 } as const;
