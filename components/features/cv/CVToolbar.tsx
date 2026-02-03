@@ -15,7 +15,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { TemplateSelector } from '@/components/layout/template-selector';
 import { CVNotesDialog } from '@/components/features/cv/CVNotesDialog';
-import { CVWithImprovements } from '@/lib/types';
+import { CVWithImprovements, AudioNote } from '@/lib/types';
 
 interface CVToolbarProps {
   cv: CVWithImprovements;
@@ -34,7 +34,10 @@ interface CVToolbarProps {
   generating: boolean;
   uploading: boolean;
   notes: string | null;
-  onNotesChange: (notes: string | null) => Promise<void>;
+  futureMissionNotes: string | null;
+  onNotesChange: (notes: string | null, futureMissionNotes: string | null) => Promise<void>;
+  audioNotes?: AudioNote[];
+  onAudioNotesChange?: () => void;
 }
 
 export function CVToolbar({
@@ -54,7 +57,10 @@ export function CVToolbar({
   generating,
   uploading,
   notes,
+  futureMissionNotes,
   onNotesChange,
+  audioNotes = [],
+  onAudioNotesChange,
 }: CVToolbarProps) {
   const [notesDialogOpen, setNotesDialogOpen] = useState(false);
 
@@ -75,13 +81,18 @@ export function CVToolbar({
         {hasContent && (
           <>
             <Button
-              variant={notes ? 'secondary' : 'outline'}
+              variant={notes || futureMissionNotes || audioNotes.length > 0 ? 'secondary' : 'outline'}
               size="icon"
-              className="h-8 w-8"
+              className="h-8 w-8 relative"
               onClick={() => setNotesDialogOpen(true)}
               title="Notes du CV"
             >
               <StickyNote className="w-4 h-4" />
+              {audioNotes.length > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary text-primary-foreground text-[10px] font-medium rounded-full flex items-center justify-center">
+                  {audioNotes.length}
+                </span>
+              )}
             </Button>
             <Button
               variant={showOriginal ? 'secondary' : 'outline'}
@@ -165,7 +176,11 @@ export function CVToolbar({
         open={notesDialogOpen}
         onOpenChange={setNotesDialogOpen}
         notes={notes}
+        futureMissionNotes={futureMissionNotes}
         onSave={onNotesChange}
+        cvId={cv.id}
+        audioNotes={audioNotes}
+        onAudioNotesChange={onAudioNotesChange}
       />
     </div>
   );

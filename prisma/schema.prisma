@@ -33,6 +33,14 @@ enum StepStatus {
   SKIPPED
 }
 
+enum AudioStatus {
+  PENDING
+  UPLOADING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
 model CV {
   id              String    @id @default(cuid())
 
@@ -52,7 +60,8 @@ model CV {
   missingFields   String[]  @default([])
 
   // User notes
-  notes           String?   @db.Text
+  notes              String?   @db.Text  // Notes contexte missions passées
+  futureMissionNotes String?   @db.Text  // Notes contexte mission à venir
 
   // Status tracking
   status          CVStatus  @default(PENDING)
@@ -73,6 +82,9 @@ model CV {
 
   // Workflow executions
   workflowExecutions WorkflowExecution[]
+
+  // Audio notes
+  audioNotes      AudioNote[]
 }
 
 model Improvement {
@@ -220,4 +232,33 @@ model WorkflowStep {
   @@index([executionId])
   @@index([agentId])
   @@index([jobId])
+}
+
+model AudioNote {
+  id              String      @id @default(cuid())
+  cvId            String
+  cv              CV          @relation(fields: [cvId], references: [id], onDelete: Cascade)
+
+  // Fichier audio
+  originalName    String      // Nom du fichier uploadé
+  audioKey        String      // Clé B2 (audio/{consultantName}/{timestamp}.ext)
+  audioUrl        String?     // URL publique B2
+  duration        Int?        // Durée en secondes
+  mimeType        String      // audio/ogg, audio/mp4, etc.
+  fileSize        Int         // Taille en bytes
+
+  // Transcription (pour plus tard avec Soniox)
+  transcription   String?     @db.Text
+  language        String?
+  status          AudioStatus @default(PENDING)
+  errorMessage    String?
+
+  // Soniox tracking (pour plus tard)
+  sonioxFileId    String?
+  sonioxJobId     String?
+
+  createdAt       DateTime    @default(now())
+  transcribedAt   DateTime?
+
+  @@index([cvId])
 }

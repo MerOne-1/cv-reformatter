@@ -16,6 +16,7 @@ const updateSchema = z.object({
   consultantName: z.string().optional(),
   title: z.string().optional(),
   notes: z.string().max(10000).nullable().optional(),
+  futureMissionNotes: z.string().max(10000).nullable().optional(),
 });
 
 export const GET = apiRoute()
@@ -26,6 +27,9 @@ export const GET = apiRoute()
       include: {
         improvements: {
           orderBy: { appliedAt: 'desc' },
+        },
+        audioNotes: {
+          orderBy: { createdAt: 'desc' },
         },
       },
     });
@@ -68,6 +72,9 @@ export const DELETE = apiRoute()
         select: {
           originalKey: true,
           generatedKey: true,
+          audioNotes: {
+            select: { audioKey: true },
+          },
         },
       });
 
@@ -76,6 +83,7 @@ export const DELETE = apiRoute()
       }
 
       // Delete from database first (inside transaction)
+      // AudioNotes will be cascade deleted
       await tx.cV.delete({
         where: { id: params.id },
       });
@@ -89,17 +97,22 @@ export const DELETE = apiRoute()
 
     // Delete files from B2 after successful DB transaction
     const { cv } = result;
-    const deleteResults = await Promise.allSettled([
-      cv.originalKey ? deleteFile(cv.originalKey) : Promise.resolve(),
-      cv.generatedKey ? deleteFile(cv.generatedKey) : Promise.resolve(),
-    ]);
+    const filesToDelete = [
+      cv.originalKey,
+      cv.generatedKey,
+      ...cv.audioNotes.map((a) => a.audioKey),
+    ].filter(Boolean) as string[];
+
+    const deleteResults = await Promise.allSettled(
+      filesToDelete.map((key) => deleteFile(key))
+    );
 
     const failedDeletions: string[] = [];
     deleteResults.forEach((result, index) => {
       if (result.status === 'rejected') {
-        const key = index === 0 ? cv.originalKey : cv.generatedKey;
+        const key = filesToDelete[index];
         console.error(`Échec de suppression du fichier B2 ${key}:`, result.reason);
-        failedDeletions.push(key || 'unknown');
+        failedDeletions.push(key);
       }
     });
 

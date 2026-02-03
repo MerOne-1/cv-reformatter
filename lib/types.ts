@@ -8,6 +8,8 @@ import {
   WorkflowStep,
   ExecutionStatus,
   StepStatus,
+  AudioNote,
+  AudioStatus,
 } from '@prisma/client';
 
 export type {
@@ -20,6 +22,8 @@ export type {
   WorkflowStep,
   ExecutionStatus,
   StepStatus,
+  AudioNote,
+  AudioStatus,
 };
 
 // Type pour le nom de template (remplace l'ancien enum Brand)
@@ -27,6 +31,10 @@ export type TemplateName = string;
 
 export interface CVWithImprovements extends CV {
   improvements: Improvement[];
+}
+
+export interface CVWithImprovementsAndAudio extends CVWithImprovements {
+  audioNotes: AudioNote[];
 }
 
 export interface CVListItem {

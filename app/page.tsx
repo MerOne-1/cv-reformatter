@@ -6,7 +6,7 @@ import { CVHeader } from '@/components/features/cv/CVHeader';
 import { CVSidebar } from '@/components/features/cv/CVSidebar';
 import { CVToolbar } from '@/components/features/cv/CVToolbar';
 import { CVEditorPanel } from '@/components/features/cv/CVEditorPanel';
-import { CVListItem, CVWithImprovements } from '@/lib/types';
+import { CVListItem, CVWithImprovementsAndAudio } from '@/lib/types';
 import { useDebouncedSave } from '@/hooks';
 import { FileText, Loader2 } from 'lucide-react';
 
@@ -23,7 +23,7 @@ interface Template {
 }
 
 export default function Home() {
-  const [selectedCV, setSelectedCV] = useState<CVWithImprovements | null>(null);
+  const [selectedCV, setSelectedCV] = useState<CVWithImprovementsAndAudio | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [markdown, setMarkdown] = useState('');
@@ -191,26 +191,39 @@ export default function Home() {
     }
   };
 
-  const handleNotesChange = useCallback(async (notes: string | null) => {
+  const handleNotesChange = useCallback(async (notes: string | null, futureMissionNotes: string | null) => {
     if (!selectedCV) return;
     try {
       const response = await fetch(`/api/cv/${selectedCV.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ notes }),
+        body: JSON.stringify({ notes, futureMissionNotes }),
       });
       if (!response.ok) {
         throw new Error('Failed to save notes');
       }
       const data = await response.json();
       if (data.success) {
-        setSelectedCV(prev => prev ? { ...prev, notes } : prev);
+        setSelectedCV(prev => prev ? { ...prev, notes, futureMissionNotes } : prev);
       } else {
         throw new Error(data.error || 'Failed to save notes');
       }
     } catch (error) {
       console.error('Error saving notes:', error);
       throw error;
+    }
+  }, [selectedCV]);
+
+  const handleAudioNotesChange = useCallback(async () => {
+    if (!selectedCV) return;
+    try {
+      const response = await fetch(`/api/cv/${selectedCV.id}`);
+      const data = await response.json();
+      if (data.success) {
+        setSelectedCV(data.data);
+      }
+    } catch (error) {
+      console.error('Error refreshing audio notes:', error);
     }
   }, [selectedCV]);
 
@@ -265,7 +278,10 @@ export default function Home() {
                 generating={generating}
                 uploading={uploading}
                 notes={selectedCV.notes ?? null}
+                futureMissionNotes={selectedCV.futureMissionNotes ?? null}
                 onNotesChange={handleNotesChange}
+                audioNotes={selectedCV.audioNotes ?? []}
+                onAudioNotesChange={handleAudioNotesChange}
               />
               <CVEditorPanel
                 cv={selectedCV}
