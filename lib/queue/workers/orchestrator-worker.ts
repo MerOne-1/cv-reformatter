@@ -14,7 +14,7 @@ interface OrchestratorJobData extends WorkflowConfig {
 export async function processOrchestratorJob(
   job: Job<OrchestratorJobData>
 ): Promise<{ executionId: string; status: string }> {
-  const { executionId, cvId, additionalContext } = job.data;
+  const { executionId, cvId } = job.data;
 
   console.log(`[Orchestrator] Starting workflow ${executionId} for CV ${cvId}`);
 
@@ -26,7 +26,7 @@ export async function processOrchestratorJob(
 
     const cv = await prisma.cV.findUnique({
       where: { id: cvId },
-      select: { markdownContent: true },
+      select: { markdownContent: true, notes: true, futureMissionNotes: true },
     });
 
     if (!cv || !cv.markdownContent) {
@@ -37,7 +37,8 @@ export async function processOrchestratorJob(
       executionId,
       cvId,
       cv.markdownContent,
-      additionalContext
+      cv.notes || undefined,
+      cv.futureMissionNotes || undefined
     );
 
     console.log(`[Orchestrator] Workflow ${executionId} jobs created`);

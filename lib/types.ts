@@ -10,6 +10,7 @@ import {
   StepStatus,
   AudioNote,
   AudioStatus,
+  AgentExecutionLog,
 } from '@prisma/client';
 
 export type {
@@ -24,6 +25,7 @@ export type {
   StepStatus,
   AudioNote,
   AudioStatus,
+  AgentExecutionLog,
 };
 
 // Type pour le nom de template (remplace l'ancien enum Brand)
@@ -59,7 +61,6 @@ export interface ExtractedCV {
 export interface ImprovementRequest {
   cvId: string;
   agentType: 'enrichisseur' | 'adaptateur' | 'contexte' | 'bio';
-  additionalContext?: string;
 }
 
 export interface AIAgentUpdate {
@@ -126,7 +127,8 @@ export interface AgentJobData {
   cvId: string;
   inputData: Record<string, unknown>;
   markdownContent: string;
-  additionalContext?: string;
+  pastMissionNotes?: string;
+  futureMissionNotes?: string;
 }
 
 export interface AgentJobResult {
@@ -140,7 +142,8 @@ export interface AgentJobResult {
 
 export interface WorkflowConfig {
   cvId: string;
-  additionalContext?: string;
+  pastMissionNotes?: string;
+  futureMissionNotes?: string;
   startAgentIds?: string[];
   timeoutMs?: number;
 }

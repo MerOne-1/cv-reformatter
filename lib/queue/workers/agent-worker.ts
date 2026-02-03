@@ -9,7 +9,7 @@ import type { AgentJobData, AgentJobResult } from '@/lib/types';
 let agentWorker: Worker | null = null;
 
 export async function processAgentJob(job: Job<AgentJobData>): Promise<AgentJobResult> {
-  const { executionId, stepId, agentId, cvId, markdownContent, additionalContext } = job.data;
+  const { executionId, stepId, agentId, cvId, markdownContent, pastMissionNotes, futureMissionNotes } = job.data;
 
   console.log(`[Agent Worker] Processing job ${job.id} for agent ${agentId}`);
 
@@ -51,7 +51,8 @@ export async function processAgentJob(job: Job<AgentJobData>): Promise<AgentJobR
       data: {
         inputData: JSON.stringify({
           markdownLength: inputMarkdown.length,
-          hasContext: !!additionalContext,
+          hasPastMissionNotes: !!pastMissionNotes,
+          hasFutureMissionNotes: !!futureMissionNotes,
           childrenCount: Object.keys(childrenValues).length,
         }),
       },
@@ -59,11 +60,17 @@ export async function processAgentJob(job: Job<AgentJobData>): Promise<AgentJobR
 
     const { system: systemPrompt, user: userPrompt } = await getAgentPrompts(
       agent.name as 'enrichisseur' | 'adaptateur' | 'contexte' | 'bio' | 'extraction',
-      inputMarkdown,
-      additionalContext
+      {
+        markdown: inputMarkdown,
+        pastMissionNotes,
+        futureMissionNotes,
+      }
     );
 
+    // Mesurer la durée de l'appel LLM
+    const startTime = Date.now();
     const improvedMarkdown = await askLLM(systemPrompt, userPrompt);
+    const durationMs = Date.now() - startTime;
 
     await prisma.workflowStep.update({
       where: { id: stepId },
@@ -74,6 +81,24 @@ export async function processAgentJob(job: Job<AgentJobData>): Promise<AgentJobR
           markdownLength: improvedMarkdown.length,
           agentName: agent.name,
         }),
+      },
+    });
+
+    // Créer le log détaillé de l'exécution
+    await prisma.agentExecutionLog.create({
+      data: {
+        agentId,
+        cvId,
+        executionId,
+        stepId,
+        systemPrompt,
+        userPrompt,
+        inputMarkdown,
+        pastMissionNotes: pastMissionNotes || null,
+        futureMissionNotes: futureMissionNotes || null,
+        outputMarkdown: improvedMarkdown,
+        durationMs,
+        success: true,
       },
     });
 

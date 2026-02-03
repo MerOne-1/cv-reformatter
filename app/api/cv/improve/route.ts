@@ -9,16 +9,21 @@ import { apiRoute, error } from '@/lib/api-route';
 const improveSchema = z.object({
   cvId: z.string(),
   agentType: z.enum(['enrichisseur', 'adaptateur', 'contexte', 'bio']),
-  additionalContext: z.string().optional(),
 });
 
 export const POST = apiRoute()
   .body(improveSchema)
   .handler(async (_, { body }) => {
-    const { cvId, agentType, additionalContext } = body;
+    const { cvId, agentType } = body;
 
     const cv = await prisma.cV.findUnique({
       where: { id: cvId },
+      select: {
+        id: true,
+        markdownContent: true,
+        notes: true,
+        futureMissionNotes: true,
+      },
     });
 
     if (!cv) {
@@ -29,14 +34,24 @@ export const POST = apiRoute()
       return error('CV has no content to improve', 400);
     }
 
+    // Récupérer l'agent pour avoir son ID
+    const agent = await prisma.aIAgent.findUnique({
+      where: { name: agentType },
+      select: { id: true },
+    });
+
+    if (!agent) {
+      return error(`Agent "${agentType}" non trouvé`, 503);
+    }
+
     let system: string;
     let user: string;
     try {
-      const prompts = await getAgentPrompts(
-        agentType,
-        cv.markdownContent,
-        additionalContext
-      );
+      const prompts = await getAgentPrompts(agentType, {
+        markdown: cv.markdownContent,
+        pastMissionNotes: cv.notes || undefined,
+        futureMissionNotes: cv.futureMissionNotes || undefined,
+      });
       system = prompts.system;
       user = prompts.user;
     } catch (e) {
@@ -46,15 +61,34 @@ export const POST = apiRoute()
       throw e;
     }
 
+    // Mesurer la durée de l'appel LLM
+    const startTime = Date.now();
     const improvedContent = await askLLM(system, user);
+    const durationMs = Date.now() - startTime;
 
     const missingFields = detectMissingFields(improvedContent);
+
+    // Créer le log détaillé de l'exécution
+    await prisma.agentExecutionLog.create({
+      data: {
+        agentId: agent.id,
+        cvId,
+        systemPrompt: system,
+        userPrompt: user,
+        inputMarkdown: cv.markdownContent,
+        pastMissionNotes: cv.notes || null,
+        futureMissionNotes: cv.futureMissionNotes || null,
+        outputMarkdown: improvedContent,
+        durationMs,
+        success: true,
+      },
+    });
 
     await prisma.improvement.create({
       data: {
         cvId,
         agentType,
-        prompt: additionalContext || '',
+        prompt: user.substring(0, 1000),
         result: improvedContent,
       },
     });

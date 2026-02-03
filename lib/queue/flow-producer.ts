@@ -33,9 +33,10 @@ export async function createAgentWorkflow(
   executionId: string,
   cvId: string,
   markdownContent: string,
-  additionalContext?: string
+  pastMissionNotes?: string,
+  futureMissionNotes?: string
 ): Promise<void> {
-  const [agents, connections] = await Promise.all([
+  const [allAgents, allConnections] = await Promise.all([
     prisma.aIAgent.findMany({
       where: { isActive: true },
       select: { id: true, name: true },
@@ -45,6 +46,17 @@ export async function createAgentWorkflow(
       select: { sourceAgentId: true, targetAgentId: true },
     }),
   ]);
+
+  // Exclure l'agent "extraction" du workflow d'amélioration
+  // L'extraction est une opération séparée (fichier → markdown)
+  const extractionAgent = allAgents.find(a => a.name === 'extraction');
+  const agents = allAgents.filter(a => a.name !== 'extraction');
+
+  // Filtrer les connexions pour exclure celles impliquant l'extraction
+  const connections = allConnections.filter(c =>
+    c.sourceAgentId !== extractionAgent?.id &&
+    c.targetAgentId !== extractionAgent?.id
+  );
 
   if (agents.length === 0) {
     throw new Error('Aucun agent actif trouvé');
@@ -113,7 +125,8 @@ export async function createAgentWorkflow(
         cvId,
         inputData: {},
         markdownContent,
-        additionalContext,
+        pastMissionNotes,
+        futureMissionNotes,
       };
 
       await flow.add({
@@ -136,7 +149,8 @@ export async function createAgentWorkflow(
     cvId,
     markdownContent,
     stepMap,
-    additionalContext
+    pastMissionNotes,
+    futureMissionNotes
   );
 
   for (const job of flowJobs) {
@@ -151,7 +165,8 @@ function buildFlowTree(
   cvId: string,
   markdownContent: string,
   stepMap: Map<string, string>,
-  additionalContext?: string
+  pastMissionNotes?: string,
+  futureMissionNotes?: string
 ): FlowJob[] {
   const agentMap = new Map<string, AgentNode>();
   for (const agent of agents) {
@@ -171,7 +186,8 @@ function buildFlowTree(
       cvId,
       inputData: {},
       markdownContent,
-      additionalContext,
+      pastMissionNotes,
+      futureMissionNotes,
     };
 
     const children: FlowChildJob[] = [];
@@ -221,7 +237,8 @@ function buildFlowTree(
       cvId,
       inputData: {},
       markdownContent,
-      additionalContext,
+      pastMissionNotes,
+      futureMissionNotes,
     };
 
     flowJobs.push({

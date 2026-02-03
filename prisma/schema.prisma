@@ -85,6 +85,9 @@ model CV {
 
   // Audio notes
   audioNotes      AudioNote[]
+
+  // Logs d'exécution des agents
+  agentExecutionLogs AgentExecutionLog[]
 }
 
 model Improvement {
@@ -151,6 +154,9 @@ model AIAgent {
   sourceConnections  AgentConnection[] @relation("SourceAgent")
   targetConnections  AgentConnection[] @relation("TargetAgent")
   workflowSteps      WorkflowStep[]
+
+  // Logs d'exécution pour analyse des prompts
+  executionLogs      AgentExecutionLog[]
 }
 
 model AgentConnection {
@@ -261,4 +267,49 @@ model AudioNote {
   transcribedAt   DateTime?
 
   @@index([cvId])
+}
+
+// Logs détaillés des exécutions d'agents pour analyse et amélioration des prompts
+model AgentExecutionLog {
+  id                  String    @id @default(cuid())
+
+  // Relations
+  agentId             String
+  agent               AIAgent   @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  cvId                String
+  cv                  CV        @relation(fields: [cvId], references: [id], onDelete: Cascade)
+
+  // Contexte d'exécution (optionnel - null si exécution directe via API improve)
+  executionId         String?
+  stepId              String?
+
+  // Inputs - Prompts envoyés au LLM
+  systemPrompt        String    @db.Text
+  userPrompt          String    @db.Text
+
+  // Inputs - Données injectées dans le template
+  inputMarkdown       String    @db.Text  // Markdown du CV en entrée
+  pastMissionNotes    String?   @db.Text  // Notes missions passées (si présentes)
+  futureMissionNotes  String?   @db.Text  // Notes mission future (si présentes)
+
+  // Output - Réponse du LLM
+  outputMarkdown      String?   @db.Text  // Résultat généré (null si erreur)
+
+  // Métriques
+  durationMs          Int?      // Durée de l'appel LLM en ms
+  tokensInput         Int?      // Nombre de tokens en entrée (si disponible)
+  tokensOutput        Int?      // Nombre de tokens en sortie (si disponible)
+
+  // Statut
+  success             Boolean   @default(true)
+  error               String?   @db.Text
+
+  // Timestamps
+  createdAt           DateTime  @default(now())
+
+  @@index([agentId])
+  @@index([cvId])
+  @@index([executionId])
+  @@index([createdAt])
 }

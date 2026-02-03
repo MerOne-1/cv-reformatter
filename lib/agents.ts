@@ -9,12 +9,22 @@ function escapeTemplateValue(value: string): string {
   return value.replace(/\{\{/g, '\\{\\{').replace(/\}\}/g, '\\}\\}');
 }
 
-function processTemplate(template: string, markdown: string, context?: string): string {
-  let result = template;
+interface ProcessTemplateOptions {
+  markdown: string;
+  context?: string;
+  pastMissionNotes?: string;
+  futureMissionNotes?: string;
+}
 
+function processTemplate(template: string, options: ProcessTemplateOptions): string {
+  let result = template;
+  const { markdown, context, pastMissionNotes, futureMissionNotes } = options;
+
+  // Remplacer {{markdown}}
   const safeMarkdown = escapeTemplateValue(markdown);
   result = result.replace(/\{\{markdown\}\}/g, safeMarkdown);
 
+  // Traiter {{context}} (legacy)
   if (context) {
     const safeContext = escapeTemplateValue(context);
     result = result.replace(/\{\{#context\}\}([\s\S]*?)\{\{\/context\}\}/g, '$1');
@@ -22,6 +32,26 @@ function processTemplate(template: string, markdown: string, context?: string): 
   } else {
     result = result.replace(/\{\{#context\}\}[\s\S]*?\{\{\/context\}\}/g, '');
     result = result.replace(/\{\{context\}\}/g, '');
+  }
+
+  // Traiter {{pastMissionNotes}}
+  if (pastMissionNotes && pastMissionNotes.trim()) {
+    const safePastNotes = escapeTemplateValue(pastMissionNotes);
+    result = result.replace(/\{\{#pastMissionNotes\}\}([\s\S]*?)\{\{\/pastMissionNotes\}\}/g, '$1');
+    result = result.replace(/\{\{pastMissionNotes\}\}/g, safePastNotes);
+  } else {
+    result = result.replace(/\{\{#pastMissionNotes\}\}[\s\S]*?\{\{\/pastMissionNotes\}\}/g, '');
+    result = result.replace(/\{\{pastMissionNotes\}\}/g, '');
+  }
+
+  // Traiter {{futureMissionNotes}}
+  if (futureMissionNotes && futureMissionNotes.trim()) {
+    const safeFutureNotes = escapeTemplateValue(futureMissionNotes);
+    result = result.replace(/\{\{#futureMissionNotes\}\}([\s\S]*?)\{\{\/futureMissionNotes\}\}/g, '$1');
+    result = result.replace(/\{\{futureMissionNotes\}\}/g, safeFutureNotes);
+  } else {
+    result = result.replace(/\{\{#futureMissionNotes\}\}[\s\S]*?\{\{\/futureMissionNotes\}\}/g, '');
+    result = result.replace(/\{\{futureMissionNotes\}\}/g, '');
   }
 
   return result;
@@ -41,10 +71,16 @@ export class AgentInactiveError extends Error {
   }
 }
 
+export interface GetAgentPromptsOptions {
+  markdown: string;
+  context?: string;
+  pastMissionNotes?: string;
+  futureMissionNotes?: string;
+}
+
 export async function getAgentPrompts(
   agentType: string,
-  markdown: string,
-  context?: string
+  options: GetAgentPromptsOptions
 ): Promise<AgentPrompts> {
   const agent = await prisma.aIAgent.findUnique({
     where: { name: agentType },
@@ -68,7 +104,7 @@ export async function getAgentPrompts(
 
   return {
     system: agent.systemPrompt,
-    user: processTemplate(agent.userPromptTemplate, markdown, context),
+    user: processTemplate(agent.userPromptTemplate, options),
   };
 }
 

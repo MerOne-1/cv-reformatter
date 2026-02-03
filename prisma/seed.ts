@@ -111,15 +111,17 @@ Le CV que tu reçois a cette structure que tu dois ABSOLUMENT conserver:
 
 {{markdown}}
 
-{{#context}}
-## Contexte additionnel:
-{{context}}
-{{/context}}
+{{#pastMissionNotes}}
+## CONTEXTE RÉEL DES MISSIONS (notes du recruteur):
+{{pastMissionNotes}}
+
+Utilise ces informations pour enrichir les descriptions d'expérience avec le vrai contexte: taille d'équipe, enjeux business, responsabilités réelles.
+{{/pastMissionNotes}}
 
 ## Instructions:
 - Améliore les 3 versions de présentation pour les rendre plus vendeuses
 - Améliore les descriptions de réalisations avec des verbes d'action
-- Enrichis les contextes de mission
+- Enrichis les contextes de mission avec les notes fournies si disponibles
 - NE MODIFIE PAS la structure, seulement le contenu textuel
 - NE SUPPRIME AUCUNE information
 - CONSERVE ##INFO MANQUANTE## si présent
@@ -174,18 +176,22 @@ Le CV que tu reçois a cette structure que tu dois ABSOLUMENT conserver:
 - CONSERVER la section ##INFO MANQUANTE## si présente
 - CONSERVER la structure exacte du document
 - Si aucun contexte de mission, améliorer de manière générique`,
-    userPromptTemplate: `Voici un CV au format Markdown. Adapte-le pour la mission/poste suivant.
+    userPromptTemplate: `Voici un CV au format Markdown. Adapte-le pour maximiser les chances du candidat.
 
 ## CV actuel:
 
 {{markdown}}
 
-## Mission/Poste ciblé:
-{{context}}
+{{#futureMissionNotes}}
+## MISSION/POSTE CIBLE:
+{{futureMissionNotes}}
+
+IMPORTANT: Adapte le CV pour ce poste spécifique. Mets en avant les compétences et expériences pertinentes. Réorganise si nécessaire.
+{{/futureMissionNotes}}
 
 ## Instructions:
-- Adapte le titre du profil si pertinent
-- Réorganise les compétences pour mettre en avant celles pertinentes
+- Adapte le titre du profil au poste cible si fourni
+- Réorganise les compétences (pertinentes en premier)
 - Adapte les 3 présentations vers cette orientation
 - Développe les expériences en lien avec la mission
 - NE SUPPRIME AUCUNE information, réorganise seulement
@@ -243,13 +249,23 @@ Le CV que tu reçois a cette structure que tu dois ABSOLUMENT conserver:
 
 {{markdown}}
 
-{{#context}}
-## Informations additionnelles:
-{{context}}
-{{/context}}
+{{#pastMissionNotes}}
+## CONTEXTE RÉEL DES MISSIONS (notes du recruteur):
+{{pastMissionNotes}}
+
+Utilise ces informations pour enrichir les contextes avec les vrais détails: taille équipe, enjeux, responsabilités.
+{{/pastMissionNotes}}
+
+{{#futureMissionNotes}}
+## MISSION/POSTE CIBLE:
+{{futureMissionNotes}}
+
+Oriente le contexte vers ce type de mission/poste.
+{{/futureMissionNotes}}
 
 ## Instructions:
 - Enrichis chaque section "Contexte" des expériences avec du contexte métier
+- Utilise les notes fournies pour ajouter des détails réels
 - Explique les enjeux business des projets
 - Ajoute des ordres de grandeur quand pertinent (sans inventer de chiffres précis)
 - CONSERVE la structure exacte du document
@@ -314,15 +330,24 @@ Le CV que tu reçois a cette structure que tu dois ABSOLUMENT conserver:
 
 {{markdown}}
 
-{{#context}}
-## Ton ou orientation souhaitée:
-{{context}}
-{{/context}}
+{{#pastMissionNotes}}
+## CONTEXTE RÉEL DU CANDIDAT (notes du recruteur):
+{{pastMissionNotes}}
+
+Utilise ces informations pour rendre les présentations plus authentiques et percutantes.
+{{/pastMissionNotes}}
+
+{{#futureMissionNotes}}
+## ORIENTATION SOUHAITÉE (poste cible):
+{{futureMissionNotes}}
+
+Oriente les présentations vers ce type de mission/poste.
+{{/futureMissionNotes}}
 
 ## Instructions:
 - Améliore les 3 versions de présentation (Technique, Business, Leadership)
 - Chaque version doit être percutante (3-4 lignes max)
-- Base-toi UNIQUEMENT sur les informations du CV
+- Base-toi sur les informations du CV et les notes fournies
 - NE MODIFIE QUE la section "Présentation"
 - CONSERVE tout le reste du CV intact
 - CONSERVE ##INFO MANQUANTE## si présent
@@ -455,10 +480,12 @@ Transforme-le en Markdown structuré selon le format demandé.
 
 {{markdown}}
 
-{{#context}}
-## Informations additionnelles:
-{{context}}
-{{/context}}
+{{#pastMissionNotes}}
+## CONTEXTE ADDITIONNEL (notes du recruteur):
+{{pastMissionNotes}}
+
+Utilise ces informations pour mieux comprendre et structurer les expériences.
+{{/pastMissionNotes}}
 
 ## Instructions:
 1. Extrais et structure TOUTES les informations présentes

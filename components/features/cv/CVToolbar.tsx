@@ -27,10 +27,12 @@ interface CVToolbarProps {
   showOriginal: boolean;
   onToggleOriginal: () => void;
   onExtract: () => void;
+  onRunWorkflow: () => void;
   onGenerate: () => void;
   onUploadFinal: () => void;
   onPreview: () => void;
   extracting: boolean;
+  runningWorkflow: boolean;
   generating: boolean;
   uploading: boolean;
   notes: string | null;
@@ -50,10 +52,12 @@ export function CVToolbar({
   showOriginal,
   onToggleOriginal,
   onExtract,
+  onRunWorkflow,
   onGenerate,
   onUploadFinal,
   onPreview,
   extracting,
+  runningWorkflow,
   generating,
   uploading,
   notes,
@@ -111,11 +115,11 @@ export function CVToolbar({
               variant="outline"
               size="icon"
               className="h-8 w-8"
-              onClick={onExtract}
-              disabled={extracting}
-              title="Régénérer l'extraction IA"
+              onClick={onRunWorkflow}
+              disabled={runningWorkflow}
+              title="Lancer le workflow d'amélioration"
             >
-              {extracting ? (
+              {runningWorkflow ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
                 <RefreshCw className="w-4 h-4" />

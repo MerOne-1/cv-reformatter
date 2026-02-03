@@ -30,6 +30,7 @@ export default function Home() {
   const [templateName, setTemplateName] = useState('DREAMIT');
   const [previewOpen, setPreviewOpen] = useState(false);
   const [extracting, setExtracting] = useState(false);
+  const [runningWorkflow, setRunningWorkflow] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -131,6 +132,66 @@ export default function Home() {
       console.error('Error extracting:', error);
     } finally {
       setExtracting(false);
+    }
+  };
+
+  const handleRunWorkflow = async () => {
+    if (!selectedCV) return;
+    try {
+      setRunningWorkflow(true);
+
+      // Lancer le workflow
+      const response = await fetch('/api/workflow/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cvId: selectedCV.id }),
+      });
+      const data = await response.json();
+
+      if (!data.success) {
+        throw new Error(data.error || 'Erreur lors du lancement du workflow');
+      }
+
+      const executionId = data.data.executionId;
+
+      // Polling du statut
+      const pollStatus = async (): Promise<void> => {
+        const statusResponse = await fetch(`/api/workflow/status/${executionId}`);
+        const statusData = await statusResponse.json();
+
+        if (!statusData.success) {
+          throw new Error(statusData.error);
+        }
+
+        const execution = statusData.data;
+
+        if (execution.status === 'COMPLETED') {
+          // Recharger le CV mis à jour
+          const cvResponse = await fetch(`/api/cv/${selectedCV.id}`);
+          const cvData = await cvResponse.json();
+          if (cvData.success) {
+            setMarkdown(cvData.data.markdownContent);
+            setSelectedCV(cvData.data);
+            handleRefresh();
+          }
+          return;
+        }
+
+        if (execution.status === 'FAILED') {
+          throw new Error(execution.error || 'Le workflow a échoué');
+        }
+
+        // Continuer le polling
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        return pollStatus();
+      };
+
+      await pollStatus();
+    } catch (error) {
+      console.error('Error running workflow:', error);
+      alert(error instanceof Error ? error.message : 'Erreur lors du workflow');
+    } finally {
+      setRunningWorkflow(false);
     }
   };
 
@@ -271,10 +332,12 @@ export default function Home() {
                 showOriginal={showOriginal}
                 onToggleOriginal={() => setShowOriginal(!showOriginal)}
                 onExtract={handleExtract}
+                onRunWorkflow={handleRunWorkflow}
                 onGenerate={handleGenerate}
                 onUploadFinal={handleUploadFinal}
                 onPreview={() => setPreviewOpen(true)}
                 extracting={extracting}
+                runningWorkflow={runningWorkflow}
                 generating={generating}
                 uploading={uploading}
                 notes={selectedCV.notes ?? null}

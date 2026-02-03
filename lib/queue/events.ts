@@ -2,6 +2,7 @@ import { QueueEvents } from 'bullmq';
 import { getRedisConnection } from './connection';
 import { QUEUE_NAMES } from './queues';
 import prisma from '@/lib/db';
+import { detectMissingFields } from '@/lib/types';
 
 let agentQueueEvents: QueueEvents | null = null;
 let orchestratorQueueEvents: QueueEvents | null = null;
@@ -16,7 +17,10 @@ export function getAgentQueueEvents(): QueueEvents {
       console.log(`[Events] Agent job ${jobId} completed`);
 
       try {
-        const result = JSON.parse(returnvalue);
+        // returnvalue peut être une string JSON ou déjà un objet
+        const result = typeof returnvalue === 'string'
+          ? JSON.parse(returnvalue)
+          : returnvalue;
         if (result.stepId) {
           const step = await prisma.workflowStep.findUnique({
             where: { id: result.stepId },
@@ -34,6 +38,27 @@ export function getAgentQueueEvents(): QueueEvents {
             const anyFailed = allSteps.some((s) => s.status === 'FAILED');
 
             if (allCompleted && !anyFailed) {
+              // Récupérer le dernier log d'exécution pour avoir le markdown final
+              const lastLog = await prisma.agentExecutionLog.findFirst({
+                where: { executionId: step.executionId },
+                orderBy: { createdAt: 'desc' },
+                select: { outputMarkdown: true, cvId: true },
+              });
+
+              // Mettre à jour le CV avec le markdown final
+              if (lastLog?.outputMarkdown && lastLog.cvId) {
+                const missingFields = detectMissingFields(lastLog.outputMarkdown);
+                await prisma.cV.update({
+                  where: { id: lastLog.cvId },
+                  data: {
+                    markdownContent: lastLog.outputMarkdown,
+                    missingFields,
+                    status: 'IMPROVED',
+                  },
+                });
+                console.log(`[Events] CV ${lastLog.cvId} updated with final markdown`);
+              }
+
               await prisma.workflowExecution.update({
                 where: { id: step.executionId },
                 data: {

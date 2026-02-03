@@ -52,10 +52,20 @@ export const POST = apiRoute()
       return error('Could not extract text from file', 400);
     }
 
+    // Récupérer l'agent pour avoir son ID
+    const agent = await prisma.aIAgent.findUnique({
+      where: { name: 'extraction' },
+      select: { id: true },
+    });
+
+    if (!agent) {
+      return error('Agent "extraction" non trouvé', 503);
+    }
+
     let system: string;
     let user: string;
     try {
-      const prompts = await getAgentPrompts('extraction', rawText);
+      const prompts = await getAgentPrompts('extraction', { markdown: rawText });
       system = prompts.system;
       user = prompts.user;
     } catch (e) {
@@ -65,7 +75,24 @@ export const POST = apiRoute()
       throw e;
     }
 
+    // Mesurer la durée de l'appel LLM
+    const startTime = Date.now();
     const markdownContent = await askLLM(system, user);
+    const durationMs = Date.now() - startTime;
+
+    // Créer le log détaillé de l'exécution
+    await prisma.agentExecutionLog.create({
+      data: {
+        agentId: agent.id,
+        cvId,
+        systemPrompt: system,
+        userPrompt: user,
+        inputMarkdown: rawText,
+        outputMarkdown: markdownContent,
+        durationMs,
+        success: true,
+      },
+    });
 
     const missingFields = detectMissingFields(markdownContent);
 

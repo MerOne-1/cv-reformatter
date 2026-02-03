@@ -6,7 +6,6 @@ import { apiRoute, error } from '@/lib/api-route';
 
 const executeSchema = z.object({
   cvId: z.string().min(1),
-  additionalContext: z.string().optional(),
 });
 
 export const POST = apiRoute()
@@ -38,9 +37,6 @@ export const POST = apiRoute()
       data: {
         cvId: body.cvId,
         status: 'PENDING',
-        inputData: body.additionalContext
-          ? JSON.stringify({ additionalContext: body.additionalContext })
-          : null,
       },
     });
 
@@ -50,7 +46,6 @@ export const POST = apiRoute()
       {
         executionId: execution.id,
         cvId: body.cvId,
-        additionalContext: body.additionalContext,
       },
       {
         jobId: `workflow-${execution.id}`,
