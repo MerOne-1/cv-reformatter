@@ -10,7 +10,13 @@ export const GET = apiRoute().handler(async () => {
     orderBy: { createdAt: 'desc' },
   });
 
-  const cvMap = new Map(existingCVs.map(cv => [cv.originalKey, cv]));
+  const activeWorkflows = await prisma.workflowExecution.groupBy({
+    by: ['cvId'],
+    where: { status: { in: ['PENDING', 'RUNNING'] } },
+  });
+  const activeWorkflowCvIds = new Set(activeWorkflows.map((w) => w.cvId));
+
+  const cvMap = new Map(existingCVs.map((cv) => [cv.originalKey, cv]));
 
   const cvList: CVListItem[] = [];
 
@@ -29,6 +35,7 @@ export const GET = apiRoute().handler(async () => {
         createdAt: existingCV.createdAt,
         updatedAt: existingCV.updatedAt,
         hasMissingFields: existingCV.missingFields.length > 0,
+        hasActiveWorkflow: activeWorkflowCvIds.has(existingCV.id),
       });
     } else {
       const newCV = await prisma.cV.create({
@@ -49,6 +56,7 @@ export const GET = apiRoute().handler(async () => {
         createdAt: newCV.createdAt,
         updatedAt: newCV.updatedAt,
         hasMissingFields: false,
+        hasActiveWorkflow: false,
       });
     }
   }

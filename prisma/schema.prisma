@@ -221,6 +221,9 @@ model WorkflowStep {
   // Statut de l'étape
   status       StepStatus  @default(PENDING)
 
+  // Position dans le graphe de workflow
+  isLeafAgent  Boolean     @default(false)  // true si cet agent est terminal (pas de successeurs)
+
   // Données d'entrée (reçues des agents sources)
   inputData    String?     @db.Text  // JSON
 

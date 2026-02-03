@@ -11,11 +11,18 @@ import {
   Code2,
   RefreshCw,
   StickyNote,
+  ChevronDown,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { TemplateSelector } from '@/components/layout/template-selector';
 import { CVNotesDialog } from '@/components/features/cv/CVNotesDialog';
-import { CVWithImprovements, AudioNote } from '@/lib/types';
+import { CVWithImprovements, AudioNote, WorkflowMode } from '@/lib/types';
 
 interface CVToolbarProps {
   cv: CVWithImprovements;
@@ -27,12 +34,13 @@ interface CVToolbarProps {
   showOriginal: boolean;
   onToggleOriginal: () => void;
   onExtract: () => void;
-  onRunWorkflow: () => void;
+  onRunWorkflow: (mode: WorkflowMode) => void;
   onGenerate: () => void;
   onUploadFinal: () => void;
   onPreview: () => void;
   extracting: boolean;
   runningWorkflow: boolean;
+  workflowProgress?: { completed: number; total: number } | null;
   generating: boolean;
   uploading: boolean;
   notes: string | null;
@@ -58,6 +66,7 @@ export function CVToolbar({
   onPreview,
   extracting,
   runningWorkflow,
+  workflowProgress,
   generating,
   uploading,
   notes,
@@ -111,20 +120,41 @@ export function CVToolbar({
                 <Columns className="w-4 h-4" />
               )}
             </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-8 w-8"
-              onClick={onRunWorkflow}
-              disabled={runningWorkflow}
-              title="Lancer le workflow d'amélioration"
-            >
-              {runningWorkflow ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <RefreshCw className="w-4 h-4" />
-              )}
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 px-2 gap-1"
+                  disabled={runningWorkflow}
+                  title="Lancer le workflow d'amélioration"
+                >
+                  {runningWorkflow ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      {workflowProgress?.total && (
+                        <span className="text-xs font-medium">
+                          {workflowProgress.completed}/{workflowProgress.total}
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="w-4 h-4" />
+                      <ChevronDown className="w-3 h-3 opacity-50" />
+                    </>
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => onRunWorkflow('full')}>
+                  Avec enrichissement
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onRunWorkflow('fast')}>
+                  Sans enrichissement
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button
               variant={viewMode === 'formatted' ? 'secondary' : 'outline'}
               size="sm"

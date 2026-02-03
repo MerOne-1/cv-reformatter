@@ -14,9 +14,9 @@ interface OrchestratorJobData extends WorkflowConfig {
 export async function processOrchestratorJob(
   job: Job<OrchestratorJobData>
 ): Promise<{ executionId: string; status: string }> {
-  const { executionId, cvId } = job.data;
+  const { executionId, cvId, mode = 'full' } = job.data;
 
-  console.log(`[Orchestrator] Starting workflow ${executionId} for CV ${cvId}`);
+  console.log(`[Orchestrator] Starting workflow ${executionId} for CV ${cvId} (mode: ${mode})`);
 
   try {
     await prisma.workflowExecution.update({
@@ -38,7 +38,8 @@ export async function processOrchestratorJob(
       cvId,
       cv.markdownContent,
       cv.notes || undefined,
-      cv.futureMissionNotes || undefined
+      cv.futureMissionNotes || undefined,
+      mode
     );
 
     console.log(`[Orchestrator] Workflow ${executionId} jobs created`);
@@ -75,6 +76,8 @@ export function startOrchestratorWorker(): Worker {
     {
       connection: getRedisConnection(),
       concurrency: 2,
+      lockDuration: 60000, // 1 minute pour l'orchestration
+      stalledInterval: 15000,
     }
   );
 

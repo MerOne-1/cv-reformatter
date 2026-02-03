@@ -182,12 +182,15 @@ export interface AgentJobResult {
   error?: string;
 }
 
+export type WorkflowMode = 'full' | 'fast';
+
 export interface WorkflowConfig {
   cvId: string;
   pastMissionNotes?: string;
   futureMissionNotes?: string;
   startAgentIds?: string[];
   timeoutMs?: number;
+  mode?: WorkflowMode;
 }
 
 export interface WorkflowExecutionWithSteps extends WorkflowExecution {

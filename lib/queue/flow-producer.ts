@@ -2,7 +2,7 @@ import { FlowProducer, FlowChildJob, FlowJob } from 'bullmq';
 import { getRedisConnection } from './connection';
 import { QUEUE_NAMES } from './queues';
 import prisma from '@/lib/db';
-import type { AgentJobData } from '@/lib/types';
+import type { AgentJobData, WorkflowMode } from '@/lib/types';
 
 let flowProducer: FlowProducer | null = null;
 
@@ -34,7 +34,8 @@ export async function createAgentWorkflow(
   cvId: string,
   markdownContent: string,
   pastMissionNotes?: string,
-  futureMissionNotes?: string
+  futureMissionNotes?: string,
+  mode: WorkflowMode = 'full'
 ): Promise<void> {
   const [allAgents, allConnections] = await Promise.all([
     prisma.aIAgent.findMany({
@@ -50,13 +51,27 @@ export async function createAgentWorkflow(
   // Exclure l'agent "extraction" du workflow d'amélioration
   // L'extraction est une opération séparée (fichier → markdown)
   const extractionAgent = allAgents.find(a => a.name === 'extraction');
-  const agents = allAgents.filter(a => a.name !== 'extraction');
+  let agents = allAgents.filter(a => a.name !== 'extraction');
 
   // Filtrer les connexions pour exclure celles impliquant l'extraction
-  const connections = allConnections.filter(c =>
+  let connections = allConnections.filter(c =>
     c.sourceAgentId !== extractionAgent?.id &&
     c.targetAgentId !== extractionAgent?.id
   );
+
+  // En mode fast, exclure aussi l'agent "enrichisseur"
+  if (mode === 'fast') {
+    const enrichisseurAgent = agents.find(a => a.name === 'enrichisseur');
+    agents = agents.filter(a => a.name !== 'enrichisseur');
+
+    // Filtrer les connexions impliquant l'enrichisseur
+    if (enrichisseurAgent) {
+      connections = connections.filter(c =>
+        c.sourceAgentId !== enrichisseurAgent.id &&
+        c.targetAgentId !== enrichisseurAgent.id
+      );
+    }
+  }
 
   if (agents.length === 0) {
     throw new Error('Aucun agent actif trouvé');
@@ -96,11 +111,15 @@ export async function createAgentWorkflow(
     throw new Error('Aucun agent racine trouvé (tous les agents ont des entrées)');
   }
 
+  // Identifier les agents feuilles (sans successeurs)
+  const leafAgentIds = new Set(leafAgents.map((a) => a.id));
+
   const steps = await prisma.workflowStep.createMany({
     data: agents.map((agent) => ({
       executionId,
       agentId: agent.id,
       status: 'PENDING',
+      isLeafAgent: leafAgentIds.has(agent.id),
     })),
   });
 
@@ -136,6 +155,8 @@ export async function createAgentWorkflow(
         opts: {
           jobId: `exec-${executionId}-agent-${agent.id}`,
           failParentOnFailure: true,
+          attempts: 2,
+          backoff: { type: 'exponential', delay: 5000 },
         },
       });
     }
@@ -208,6 +229,8 @@ function buildFlowTree(
       opts: {
         jobId: `exec-${executionId}-agent-${agent.id}`,
         failParentOnFailure: true,
+        attempts: 2,
+        backoff: { type: 'exponential', delay: 5000 },
       },
     };
 
@@ -248,6 +271,8 @@ function buildFlowTree(
       opts: {
         jobId: `exec-${executionId}-agent-${root.id}`,
         failParentOnFailure: true,
+        attempts: 2,
+        backoff: { type: 'exponential', delay: 5000 },
       },
     });
   }

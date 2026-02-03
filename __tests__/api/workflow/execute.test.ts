@@ -129,7 +129,7 @@ describe('Workflow Execute API', () => {
       expect(response.status).toBe(400);
     });
 
-    it('should pass additional context when provided', async () => {
+    it('should create execution without inputData (notes come from CV)', async () => {
       const mockCV = {
         id: 'cv-1',
         markdownContent: '# Test CV',
@@ -142,7 +142,6 @@ describe('Workflow Execute API', () => {
         id: 'exec-1',
         cvId: 'cv-1',
         status: 'PENDING',
-        inputData: JSON.stringify({ additionalContext: 'Mission Java' }),
       };
 
       vi.mocked(prisma.cV.findUnique).mockResolvedValue(mockCV as any);
@@ -151,10 +150,7 @@ describe('Workflow Execute API', () => {
 
       const request = new NextRequest('http://localhost/api/workflow/execute', {
         method: 'POST',
-        body: JSON.stringify({
-          cvId: 'cv-1',
-          additionalContext: 'Mission Java',
-        }),
+        body: JSON.stringify({ cvId: 'cv-1' }),
       });
 
       const response = await POST(request, emptyContext);
@@ -162,9 +158,10 @@ describe('Workflow Execute API', () => {
 
       expect(data.success).toBe(true);
       expect(prisma.workflowExecution.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({
-          inputData: expect.stringContaining('Mission Java'),
-        }),
+        data: {
+          cvId: 'cv-1',
+          status: 'PENDING',
+        },
       });
     });
   });

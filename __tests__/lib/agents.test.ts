@@ -29,7 +29,7 @@ describe('getAgentPrompts', () => {
 
     (prisma.aIAgent.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(mockAgent);
 
-    const result = await getAgentPrompts('enrichisseur', 'Mon CV', 'contexte test');
+    const result = await getAgentPrompts('enrichisseur', { markdown: 'Mon CV', context: 'contexte test' });
 
     expect(result.system).toBe('DB system prompt');
     expect(result.user).toBe('CV: Mon CV Context: contexte test');
@@ -46,17 +46,66 @@ describe('getAgentPrompts', () => {
 
     (prisma.aIAgent.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(mockAgent);
 
-    const result = await getAgentPrompts('enrichisseur', 'Mon CV');
+    const result = await getAgentPrompts('enrichisseur', { markdown: 'Mon CV' });
 
     expect(result.user).toBe('CV: Mon CV');
     expect(result.user).not.toContain('Context:');
   });
 
+  it('should process template with pastMissionNotes', async () => {
+    const mockAgent = {
+      id: '1',
+      name: 'enrichisseur',
+      systemPrompt: 'DB system prompt',
+      userPromptTemplate: 'CV: {{markdown}}{{#pastMissionNotes}} Notes: {{pastMissionNotes}}{{/pastMissionNotes}}',
+      isActive: true,
+    };
+
+    (prisma.aIAgent.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(mockAgent);
+
+    const result = await getAgentPrompts('enrichisseur', { markdown: 'Mon CV', pastMissionNotes: 'Equipe de 5' });
+
+    expect(result.user).toBe('CV: Mon CV Notes: Equipe de 5');
+  });
+
+  it('should process template with futureMissionNotes', async () => {
+    const mockAgent = {
+      id: '1',
+      name: 'adaptateur',
+      systemPrompt: 'DB system prompt',
+      userPromptTemplate: 'CV: {{markdown}}{{#futureMissionNotes}} Poste: {{futureMissionNotes}}{{/futureMissionNotes}}',
+      isActive: true,
+    };
+
+    (prisma.aIAgent.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(mockAgent);
+
+    const result = await getAgentPrompts('adaptateur', { markdown: 'Mon CV', futureMissionNotes: 'Tech Lead React' });
+
+    expect(result.user).toBe('CV: Mon CV Poste: Tech Lead React');
+  });
+
+  it('should remove conditional blocks when notes are empty', async () => {
+    const mockAgent = {
+      id: '1',
+      name: 'enrichisseur',
+      systemPrompt: 'DB system prompt',
+      userPromptTemplate: 'CV: {{markdown}}{{#pastMissionNotes}} Notes: {{pastMissionNotes}}{{/pastMissionNotes}}',
+      isActive: true,
+    };
+
+    (prisma.aIAgent.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(mockAgent);
+
+    const result = await getAgentPrompts('enrichisseur', { markdown: 'Mon CV', pastMissionNotes: '' });
+
+    expect(result.user).toBe('CV: Mon CV');
+    expect(result.user).not.toContain('Notes:');
+  });
+
   it('should throw AgentNotFoundError when agent not in DB', async () => {
     (prisma.aIAgent.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(null);
 
-    await expect(getAgentPrompts('enrichisseur', 'Mon CV')).rejects.toThrow(AgentNotFoundError);
-    await expect(getAgentPrompts('enrichisseur', 'Mon CV')).rejects.toThrow(
+    await expect(getAgentPrompts('enrichisseur', { markdown: 'Mon CV' })).rejects.toThrow(AgentNotFoundError);
+    await expect(getAgentPrompts('enrichisseur', { markdown: 'Mon CV' })).rejects.toThrow(
       'Agent "enrichisseur" non trouvé en base de données'
     );
   });
@@ -72,8 +121,8 @@ describe('getAgentPrompts', () => {
 
     (prisma.aIAgent.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(mockAgent);
 
-    await expect(getAgentPrompts('enrichisseur', 'Mon CV')).rejects.toThrow(AgentInactiveError);
-    await expect(getAgentPrompts('enrichisseur', 'Mon CV')).rejects.toThrow(
+    await expect(getAgentPrompts('enrichisseur', { markdown: 'Mon CV' })).rejects.toThrow(AgentInactiveError);
+    await expect(getAgentPrompts('enrichisseur', { markdown: 'Mon CV' })).rejects.toThrow(
       'Agent "enrichisseur" est désactivé'
     );
   });
@@ -83,7 +132,139 @@ describe('getAgentPrompts', () => {
       new Error('DB connection failed')
     );
 
-    await expect(getAgentPrompts('enrichisseur', 'Mon CV')).rejects.toThrow('DB connection failed');
+    await expect(getAgentPrompts('enrichisseur', { markdown: 'Mon CV' })).rejects.toThrow('DB connection failed');
+  });
+
+  it('should throw error when system prompt is empty', async () => {
+    const mockAgent = {
+      id: '1',
+      name: 'enrichisseur',
+      systemPrompt: '',
+      userPromptTemplate: 'CV: {{markdown}}',
+      isActive: true,
+    };
+
+    (prisma.aIAgent.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(mockAgent);
+
+    await expect(getAgentPrompts('enrichisseur', { markdown: 'Mon CV' })).rejects.toThrow(
+      'Agent "enrichisseur" a un prompt système vide'
+    );
+  });
+
+  it('should throw error when system prompt is whitespace only', async () => {
+    const mockAgent = {
+      id: '1',
+      name: 'enrichisseur',
+      systemPrompt: '   ',
+      userPromptTemplate: 'CV: {{markdown}}',
+      isActive: true,
+    };
+
+    (prisma.aIAgent.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(mockAgent);
+
+    await expect(getAgentPrompts('enrichisseur', { markdown: 'Mon CV' })).rejects.toThrow(
+      'Agent "enrichisseur" a un prompt système vide'
+    );
+  });
+
+  it('should throw error when user prompt template is empty', async () => {
+    const mockAgent = {
+      id: '1',
+      name: 'enrichisseur',
+      systemPrompt: 'System prompt',
+      userPromptTemplate: '',
+      isActive: true,
+    };
+
+    (prisma.aIAgent.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(mockAgent);
+
+    await expect(getAgentPrompts('enrichisseur', { markdown: 'Mon CV' })).rejects.toThrow(
+      'Agent "enrichisseur" a un template utilisateur vide'
+    );
+  });
+
+  it('should escape template injection attempts in markdown', async () => {
+    const mockAgent = {
+      id: '1',
+      name: 'enrichisseur',
+      systemPrompt: 'System prompt',
+      userPromptTemplate: 'CV: {{markdown}}',
+      isActive: true,
+    };
+
+    (prisma.aIAgent.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(mockAgent);
+
+    // Attempt to inject template syntax
+    const result = await getAgentPrompts('enrichisseur', {
+      markdown: 'Malicious {{#context}}injected{{/context}} content',
+    });
+
+    // The curly braces should be escaped
+    expect(result.user).toContain('\\{\\{#context\\}\\}');
+    expect(result.user).not.toContain('{{#context}}');
+  });
+
+  it('should escape template injection attempts in notes', async () => {
+    const mockAgent = {
+      id: '1',
+      name: 'enrichisseur',
+      systemPrompt: 'System prompt',
+      userPromptTemplate: 'CV: {{markdown}}{{#pastMissionNotes}} Notes: {{pastMissionNotes}}{{/pastMissionNotes}}',
+      isActive: true,
+    };
+
+    (prisma.aIAgent.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(mockAgent);
+
+    const result = await getAgentPrompts('enrichisseur', {
+      markdown: 'Mon CV',
+      pastMissionNotes: 'Notes with {{futureMissionNotes}} injection attempt',
+    });
+
+    // The injection attempt should be escaped
+    expect(result.user).toContain('\\{\\{futureMissionNotes\\}\\}');
+  });
+
+  it('should handle all notes fields together', async () => {
+    const mockAgent = {
+      id: '1',
+      name: 'enrichisseur',
+      systemPrompt: 'System prompt',
+      userPromptTemplate: 'CV: {{markdown}}{{#context}} Ctx: {{context}}{{/context}}{{#pastMissionNotes}} Past: {{pastMissionNotes}}{{/pastMissionNotes}}{{#futureMissionNotes}} Future: {{futureMissionNotes}}{{/futureMissionNotes}}',
+      isActive: true,
+    };
+
+    (prisma.aIAgent.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(mockAgent);
+
+    const result = await getAgentPrompts('enrichisseur', {
+      markdown: 'Mon CV',
+      context: 'Legacy context',
+      pastMissionNotes: 'Past notes',
+      futureMissionNotes: 'Future notes',
+    });
+
+    expect(result.user).toBe('CV: Mon CV Ctx: Legacy context Past: Past notes Future: Future notes');
+  });
+
+  it('should handle whitespace-only notes as empty', async () => {
+    const mockAgent = {
+      id: '1',
+      name: 'enrichisseur',
+      systemPrompt: 'System prompt',
+      userPromptTemplate: 'CV: {{markdown}}{{#pastMissionNotes}} Past: {{pastMissionNotes}}{{/pastMissionNotes}}{{#futureMissionNotes}} Future: {{futureMissionNotes}}{{/futureMissionNotes}}',
+      isActive: true,
+    };
+
+    (prisma.aIAgent.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(mockAgent);
+
+    const result = await getAgentPrompts('enrichisseur', {
+      markdown: 'Mon CV',
+      pastMissionNotes: '   ',
+      futureMissionNotes: '\n\t',
+    });
+
+    expect(result.user).toBe('CV: Mon CV');
+    expect(result.user).not.toContain('Past:');
+    expect(result.user).not.toContain('Future:');
   });
 });
 

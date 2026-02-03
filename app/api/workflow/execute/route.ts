@@ -6,6 +6,7 @@ import { apiRoute, error } from '@/lib/api-route';
 
 const executeSchema = z.object({
   cvId: z.string().min(1),
+  mode: z.enum(['full', 'fast']).optional().default('full'),
 });
 
 export const POST = apiRoute()
@@ -22,6 +23,22 @@ export const POST = apiRoute()
 
     if (!cv.markdownContent) {
       return error('Le CV doit être extrait avant de lancer un workflow', 400);
+    }
+
+    // Vérifier qu'il n'y a pas d'exécution en cours pour ce CV
+    const existingExecution = await prisma.workflowExecution.findFirst({
+      where: {
+        cvId: body.cvId,
+        status: { in: ['PENDING', 'RUNNING'] },
+      },
+      select: { id: true, status: true },
+    });
+
+    if (existingExecution) {
+      return error(
+        `Un workflow est déjà en cours pour ce CV (ID: ${existingExecution.id}, status: ${existingExecution.status})`,
+        409
+      );
     }
 
     const activeAgents = await prisma.aIAgent.findMany({
@@ -46,6 +63,7 @@ export const POST = apiRoute()
       {
         executionId: execution.id,
         cvId: body.cvId,
+        mode: body.mode,
       },
       {
         jobId: `workflow-${execution.id}`,

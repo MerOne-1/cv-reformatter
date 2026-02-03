@@ -1,23 +1,21 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { downloadFile, renameFile, getRawCVKey } from '@/lib/b2';
-import { askLLM } from '@/lib/llm';
+import { askLLM, extractWithMistralOCRBase64 } from '@/lib/llm';
 import { getAgentPrompts, AgentNotFoundError, AgentInactiveError } from '@/lib/agents';
 import { detectMissingFields } from '@/lib/types';
 import { getFileExtension, extractConsultantNameFromFilename, generateRawFilename, getContentTypeForExtension } from '@/lib/utils';
 import { z } from 'zod';
 import { apiRoute, error } from '@/lib/api-route';
 
-async function extractTextFromPDF(buffer: Buffer): Promise<string> {
-  const pdfParse = (await import('pdf-parse')).default;
-  const data = await pdfParse(buffer);
-  return data.text;
-}
-
-async function extractTextFromDOCX(buffer: Buffer): Promise<string> {
-  const officeparser = await import('officeparser');
-  return officeparser.parseOfficeAsync(buffer) as Promise<string>;
-}
+const SUPPORTED_MIME_TYPES: Record<string, string> = {
+  pdf: 'application/pdf',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  doc: 'application/msword',
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+};
 
 const extractSchema = z.object({
   cvId: z.string(),
@@ -39,17 +37,31 @@ export const POST = apiRoute()
     const fileBuffer = await downloadFile(cv.originalKey);
     const extension = getFileExtension(cv.originalName);
 
+    // Vérifier le format supporté par Mistral OCR
+    const mimeType = SUPPORTED_MIME_TYPES[extension];
+    if (!mimeType) {
+      return error(`Format non supporté: ${extension}. Formats acceptés: PDF, DOCX, DOC, PNG, JPG`, 400);
+    }
+
+    // Extraction via Mistral OCR
     let rawText: string;
-    if (extension === 'pdf') {
-      rawText = await extractTextFromPDF(fileBuffer);
-    } else if (extension === 'docx' || extension === 'doc') {
-      rawText = await extractTextFromDOCX(fileBuffer);
-    } else {
-      return error('Unsupported file format', 400);
+    let ocrPagesProcessed: number;
+    try {
+      const base64Content = fileBuffer.toString('base64');
+      const ocrResult = await extractWithMistralOCRBase64(base64Content, mimeType);
+      rawText = ocrResult.markdown;
+      ocrPagesProcessed = ocrResult.pagesProcessed;
+      console.log(`Mistral OCR: ${ocrPagesProcessed} page(s) extraite(s) pour CV ${cvId}`);
+    } catch (ocrError) {
+      console.error('Erreur Mistral OCR:', ocrError);
+      return error(
+        `Erreur lors de l'extraction OCR: ${ocrError instanceof Error ? ocrError.message : 'Erreur inconnue'}`,
+        500
+      );
     }
 
     if (!rawText || rawText.trim().length < 50) {
-      return error('Could not extract text from file', 400);
+      return error('Le document semble vide ou illisible. Vérifiez la qualité du fichier.', 400);
     }
 
     // Récupérer l'agent pour avoir son ID

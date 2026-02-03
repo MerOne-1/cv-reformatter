@@ -37,12 +37,20 @@ export async function processAgentJob(job: Job<AgentJobData>): Promise<AgentJobR
     if (Object.keys(childrenValues).length > 0) {
       console.log(`[Agent Worker] Agent ${agent.name} received ${Object.keys(childrenValues).length} inputs`);
 
-      const validOutputs = Object.values(childrenValues)
-        .filter((v) => v && v.success && v.improvedMarkdown)
-        .map((v) => v.improvedMarkdown);
+      // Tri déterministe par clé (job key contient l'agentId) pour éviter un comportement aléatoire
+      // Format de clé: "bull:agent-execution:exec-{executionId}-agent-{agentId}"
+      const sortedEntries = Object.entries(childrenValues)
+        .filter(([, v]) => v && v.success && v.improvedMarkdown)
+        .sort(([keyA], [keyB]) => keyA.localeCompare(keyB));
 
-      if (validOutputs.length > 0) {
-        inputMarkdown = validOutputs[validOutputs.length - 1];
+      if (sortedEntries.length === 1) {
+        // Un seul parent: utiliser son output directement
+        inputMarkdown = sortedEntries[0][1].improvedMarkdown;
+      } else if (sortedEntries.length > 1) {
+        // Plusieurs parents: prendre le dernier dans l'ordre alphabétique (déterministe)
+        // Note: pour un vrai merge intelligent, il faudrait une stratégie de fusion métier
+        inputMarkdown = sortedEntries[sortedEntries.length - 1][1].improvedMarkdown;
+        console.log(`[Agent Worker] Multiple parents (${sortedEntries.length}), using last in sorted order`);
       }
     }
 
@@ -157,12 +165,17 @@ export function startAgentWorker(): Worker {
 
   const concurrency = parseInt(process.env.WORKER_CONCURRENCY || '5', 10);
 
+  // Timeout de 5 minutes pour les appels LLM (lockDuration doit être > temps d'exécution max)
+  const lockDuration = parseInt(process.env.WORKER_LOCK_DURATION || '300000', 10); // 5 min
+
   agentWorker = new Worker(
     QUEUE_NAMES.AGENT_EXECUTION,
     processAgentJob,
     {
       connection: getRedisConnection(),
       concurrency,
+      lockDuration,
+      stalledInterval: 30000, // Vérifier les jobs stalled toutes les 30s
     }
   );
 

@@ -1,8 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { CVListItem, CVStatus } from '@/lib/types';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { CVUpload } from '@/components/features/cv/cv-upload';
 import { formatDate, truncateText } from '@/lib/utils';
@@ -17,8 +16,11 @@ import {
   FileCheck,
   Edit3,
   Upload as UploadIcon,
+  Loader2,
+  AlertCircle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useCVList } from '@/lib/queries';
 
 interface CVListProps {
   onSelectCV: (cv: CVListItem) => void;
@@ -73,8 +75,7 @@ const statusConfig: Record<CVStatus, {
 };
 
 export function CVList({ onSelectCV, selectedId, onRefresh, onDelete, compact }: CVListProps) {
-  const [cvs, setCVs] = useState<CVListItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: cvs = [], isLoading: loading, isError, error, refetch } = useCVList();
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const handleDelete = async (e: React.MouseEvent, cv: CVListItem) => {
@@ -95,7 +96,7 @@ export function CVList({ onSelectCV, selectedId, onRefresh, onDelete, compact }:
       const data = await response.json();
 
       if (data.success) {
-        setCVs((prev) => prev.filter((c) => c.id !== cv.id));
+        refetch();
         onDelete?.(cv.id);
         onRefresh?.();
       } else {
@@ -108,25 +109,6 @@ export function CVList({ onSelectCV, selectedId, onRefresh, onDelete, compact }:
       setDeletingId(null);
     }
   };
-
-  const fetchCVs = async () => {
-    try {
-      setLoading(true);
-      const response = await fetch('/api/cv/list');
-      const data = await response.json();
-      if (data.success) {
-        setCVs(data.data);
-      }
-    } catch (err) {
-      console.error('Error fetching CVs:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchCVs();
-  }, []);
 
   return (
     <div className="h-full flex flex-col">
@@ -144,7 +126,7 @@ export function CVList({ onSelectCV, selectedId, onRefresh, onDelete, compact }:
           variant="ghost"
           size="icon-sm"
           onClick={() => {
-            fetchCVs();
+            refetch();
             onRefresh?.();
           }}
           disabled={loading}
@@ -157,7 +139,7 @@ export function CVList({ onSelectCV, selectedId, onRefresh, onDelete, compact }:
       <div className="flex-shrink-0 p-3 border-b border-border">
         <CVUpload
           onUploadComplete={() => {
-            fetchCVs();
+            refetch();
             onRefresh?.();
           }}
           compact
@@ -166,7 +148,26 @@ export function CVList({ onSelectCV, selectedId, onRefresh, onDelete, compact }:
 
       {/* List */}
       <div className="flex-1 overflow-auto scrollbar-minimal">
-        {loading ? (
+        {isError ? (
+          <div className="flex flex-col items-center justify-center h-full p-6 text-center">
+            <div className="w-14 h-14 rounded-2xl bg-destructive/10 border border-destructive/20 flex items-center justify-center mb-4">
+              <AlertCircle className="w-6 h-6 text-destructive" />
+            </div>
+            <p className="text-sm text-destructive mb-1">Erreur de chargement</p>
+            <p className="text-xs text-muted-foreground mb-4">
+              {error instanceof Error ? error.message : 'Impossible de charger les CVs'}
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => refetch()}
+              className="gap-2"
+            >
+              <RefreshCw className="w-3 h-3" />
+              Réessayer
+            </Button>
+          </div>
+        ) : loading ? (
           <div className="p-3 space-y-2">
             {[1, 2, 3].map((i) => (
               <div key={i} className="h-16 rounded-xl loading-shimmer" />
@@ -217,14 +218,16 @@ export function CVList({ onSelectCV, selectedId, onRefresh, onDelete, compact }:
                     <div className="flex items-start gap-3">
                       {/* Avatar / Icon */}
                       <div className={cn(
-                        'flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center transition-colors',
+                        'flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center transition-colors relative',
                         isSelected
                           ? cv.templateName === 'DREAMIT'
                             ? 'bg-dreamit/20 text-dreamit'
                             : 'bg-rupturae/20 text-rupturae'
                           : 'bg-secondary text-muted-foreground'
                       )}>
-                        {isCompleted ? (
+                        {cv.hasActiveWorkflow ? (
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                        ) : isCompleted ? (
                           <CheckCircle2 className="w-5 h-5" />
                         ) : cv.consultantName ? (
                           <User className="w-5 h-5" />

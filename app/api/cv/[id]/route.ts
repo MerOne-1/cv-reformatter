@@ -31,6 +31,16 @@ export const GET = apiRoute()
         audioNotes: {
           orderBy: { createdAt: 'desc' },
         },
+        workflowExecutions: {
+          where: { status: { in: ['PENDING', 'RUNNING'] } },
+          orderBy: { startedAt: 'desc' },
+          take: 1,
+          include: {
+            steps: {
+              select: { status: true },
+            },
+          },
+        },
       },
     });
 
@@ -38,7 +48,22 @@ export const GET = apiRoute()
       return error('CV not found', 404);
     }
 
-    return success(cv);
+    const activeExecution = cv.workflowExecutions[0];
+    const activeWorkflow = activeExecution
+      ? {
+          id: activeExecution.id,
+          status: activeExecution.status as 'PENDING' | 'RUNNING',
+          startedAt: activeExecution.startedAt,
+          progress: {
+            completed: activeExecution.steps.filter((s) => s.status === 'COMPLETED').length,
+            total: activeExecution.steps.length,
+          },
+        }
+      : null;
+
+    const { workflowExecutions: _executions, ...cvWithoutExecutions } = cv;
+
+    return success({ ...cvWithoutExecutions, activeWorkflow });
   });
 
 export const PATCH = apiRoute()

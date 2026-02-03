@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { cvKeys } from '@/lib/queries';
 import { useCVStore } from '@/lib/stores';
-import { CVWithImprovementsAndAudio } from '@/lib/types';
+import { CVWithImprovementsAndAudio, WorkflowMode } from '@/lib/types';
 
 export interface WorkflowProgress {
   id: string;
@@ -35,9 +35,20 @@ export function useWorkflow(options: UseWorkflowOptions = {}) {
 
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
   const cancelledRef = useRef(false);
+  const currentCvIdRef = useRef<string | null>(null);
 
   // Check for active workflow on CV change
   useEffect(() => {
+    // Annuler le polling de l'ancien CV
+    cancelledRef.current = true;
+    if (pollingRef.current) {
+      clearTimeout(pollingRef.current);
+      pollingRef.current = null;
+    }
+
+    // Mettre à jour la référence du CV actuel
+    currentCvIdRef.current = selectedCV?.id ?? null;
+
     if (selectedCV?.activeWorkflow) {
       setExecutionId(selectedCV.activeWorkflow.id);
       setIsRunning(true);
@@ -46,6 +57,8 @@ export function useWorkflow(options: UseWorkflowOptions = {}) {
         status: selectedCV.activeWorkflow.status as 'PENDING' | 'RUNNING',
         progress: selectedCV.activeWorkflow.progress,
       });
+      // Réactiver le polling pour le nouveau CV
+      cancelledRef.current = false;
     } else {
       setExecutionId(null);
       setIsRunning(false);
@@ -53,11 +66,22 @@ export function useWorkflow(options: UseWorkflowOptions = {}) {
     }
   }, [selectedCV?.id, selectedCV?.activeWorkflow]);
 
-  const pollStatus = useCallback(async (execId: string) => {
+  const pollStatus = useCallback(async (execId: string, forCvId: string) => {
     if (cancelledRef.current) return;
+
+    // Vérifier que le CV n'a pas changé pendant le polling
+    if (currentCvIdRef.current !== forCvId) {
+      console.log('[useWorkflow] CV changed, stopping poll for', execId);
+      return;
+    }
 
     try {
       const response = await fetch(`/api/workflow/status/${execId}`);
+
+      if (!response.ok) {
+        throw new Error(`Erreur serveur: ${response.status} ${response.statusText}`);
+      }
+
       const data = await response.json();
 
       if (!data.success) {
@@ -73,35 +97,57 @@ export function useWorkflow(options: UseWorkflowOptions = {}) {
 
         // Fetch updated CV
         if (selectedCV) {
-          const cvResponse = await fetch(`/api/cv/${selectedCV.id}`);
-          const cvData = await cvResponse.json();
-          if (cvData.success) {
-            updateSelectedCV(cvData.data);
+          try {
+            const cvResponse = await fetch(`/api/cv/${selectedCV.id}`);
+            if (!cvResponse.ok) {
+              throw new Error(`Erreur lors du chargement du CV: ${cvResponse.status}`);
+            }
+            const cvData = await cvResponse.json();
+            if (cvData.success) {
+              updateSelectedCV(cvData.data);
+              queryClient.invalidateQueries({ queryKey: cvKeys.lists() });
+              onComplete?.(cvData.data);
+            } else {
+              console.error('[useWorkflow] CV fetch returned success: false', cvData.error);
+              // Quand même invalider les queries pour rafraîchir la liste
+              queryClient.invalidateQueries({ queryKey: cvKeys.lists() });
+            }
+          } catch (cvError) {
+            console.error('[useWorkflow] Error fetching CV after completion:', cvError);
+            // Invalider les queries pour forcer un rafraîchissement
             queryClient.invalidateQueries({ queryKey: cvKeys.lists() });
-            onComplete?.(cvData.data);
           }
         }
       } else if (status.status === 'FAILED' || status.status === 'CANCELLED') {
         setIsRunning(false);
         setExecutionId(null);
-        onError?.(new Error(status.error || 'Workflow failed'));
+        // Invalider les queries pour mettre à jour hasActiveWorkflow
+        queryClient.invalidateQueries({ queryKey: cvKeys.lists() });
+        onError?.(new Error(status.error || 'Le workflow a échoué'));
       } else {
         // Continue polling
-        pollingRef.current = setTimeout(() => pollStatus(execId), 2000);
+        pollingRef.current = setTimeout(() => pollStatus(execId, forCvId), 2000);
       }
     } catch (error) {
-      console.error('Polling error:', error);
-      onError?.(error instanceof Error ? error : new Error('Polling failed'));
+      const errorMessage = error instanceof Error ? error.message : 'Erreur de connexion';
+      console.error('[useWorkflow] Polling error:', errorMessage);
+
       setIsRunning(false);
       setExecutionId(null);
+      setProgress(null);
+
+      // Invalider les queries pour rafraîchir l'état
+      queryClient.invalidateQueries({ queryKey: cvKeys.lists() });
+
+      onError?.(error instanceof Error ? error : new Error('Erreur de polling'));
     }
   }, [selectedCV, updateSelectedCV, queryClient, onComplete, onError]);
 
   // Start polling when executionId changes
   useEffect(() => {
-    if (executionId && isRunning) {
+    if (executionId && isRunning && selectedCV?.id) {
       cancelledRef.current = false;
-      pollStatus(executionId);
+      pollStatus(executionId, selectedCV.id);
     }
 
     return () => {
@@ -110,9 +156,9 @@ export function useWorkflow(options: UseWorkflowOptions = {}) {
         clearTimeout(pollingRef.current);
       }
     };
-  }, [executionId, isRunning, pollStatus]);
+  }, [executionId, isRunning, selectedCV?.id, pollStatus]);
 
-  const start = useCallback(async () => {
+  const start = useCallback(async (mode: WorkflowMode = 'full') => {
     if (!selectedCV) return;
 
     try {
@@ -122,13 +168,17 @@ export function useWorkflow(options: UseWorkflowOptions = {}) {
       const response = await fetch('/api/workflow/execute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cvId: selectedCV.id }),
+        body: JSON.stringify({ cvId: selectedCV.id, mode }),
       });
+
+      if (!response.ok) {
+        throw new Error(`Erreur serveur: ${response.status} ${response.statusText}`);
+      }
 
       const data = await response.json();
 
       if (!data.success) {
-        throw new Error(data.error || 'Failed to start workflow');
+        throw new Error(data.error || 'Impossible de lancer le workflow');
       }
 
       setExecutionId(data.data.executionId);
@@ -139,7 +189,8 @@ export function useWorkflow(options: UseWorkflowOptions = {}) {
       });
     } catch (error) {
       setIsRunning(false);
-      onError?.(error instanceof Error ? error : new Error('Failed to start workflow'));
+      setProgress(null);
+      onError?.(error instanceof Error ? error : new Error('Impossible de lancer le workflow'));
     }
   }, [selectedCV, onError]);
 

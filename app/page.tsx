@@ -1,13 +1,14 @@
 'use client';
 
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { CVPreviewModal } from '@/components/features/cv/cv-preview-modal';
 import { CVHeader } from '@/components/features/cv/CVHeader';
 import { CVSidebar } from '@/components/features/cv/CVSidebar';
 import { CVToolbar } from '@/components/features/cv/CVToolbar';
 import { CVEditorPanel } from '@/components/features/cv/CVEditorPanel';
 import { CVListItem } from '@/lib/types';
-import { FileText, Loader2 } from 'lucide-react';
+import { FileText, AlertCircle, X } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 // Stores
 import { useCVStore, useUIStore } from '@/lib/stores';
@@ -39,6 +40,9 @@ export default function Home() {
     setPreviewModalOpen,
   } = useUIStore();
 
+  // === LOCAL STATE ===
+  const [showOriginal, setShowOriginal] = useState(false);
+
   // === QUERIES ===
   const { refetch: refetchCVList } = useCVList();
   const { data: templates = [] } = useTemplates();
@@ -61,13 +65,16 @@ export default function Home() {
 
   useAutoSave({ enabled: !!selectedCV });
 
+  const [workflowError, setWorkflowError] = useState<string | null>(null);
+
   const handleWorkflowComplete = useCallback(() => {
+    setWorkflowError(null);
     refetchCVList();
   }, [refetchCVList]);
 
   const handleWorkflowError = useCallback((error: Error) => {
     console.error('Workflow error:', error);
-    alert(error.message);
+    setWorkflowError(error.message);
   }, []);
 
   const { start: startWorkflow, isRunning: runningWorkflow, progress: workflowProgress } = useWorkflow({
@@ -127,6 +134,22 @@ export default function Home() {
         />
 
         <div className="flex-1 flex flex-col overflow-hidden bg-background">
+          {/* Error Banner */}
+          {workflowError && (
+            <Alert variant="destructive" className="mx-4 mt-2 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{workflowError}</AlertDescription>
+              </div>
+              <button
+                onClick={() => setWorkflowError(null)}
+                className="p-1 hover:bg-destructive/20 rounded"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </Alert>
+          )}
+
           {selectedCV ? (
             <>
               <CVToolbar
@@ -136,8 +159,8 @@ export default function Home() {
                 hasContent={hasContent}
                 viewMode={viewMode}
                 onViewModeChange={setViewMode}
-                showOriginal={false}
-                onToggleOriginal={() => {}}
+                showOriginal={showOriginal}
+                onToggleOriginal={() => setShowOriginal(!showOriginal)}
                 onExtract={extract}
                 onRunWorkflow={startWorkflow}
                 onGenerate={generate}
@@ -159,7 +182,7 @@ export default function Home() {
                 markdown={markdown}
                 onChange={setMarkdown}
                 viewMode={viewMode}
-                showOriginal={false}
+                showOriginal={showOriginal}
                 templateName={templateName}
                 onExtract={extract}
                 extracting={extracting}
