@@ -49,7 +49,7 @@ services:
     # Port exposed via Traefik only - no direct host mapping
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.cv-reformatter-dev.rule=Host(`reformatter.kart-automation.xyz`) || Host(`www.reformatter.kart-automation.xyz`)"
+      - "traefik.http.routers.cv-reformatter-dev.rule=Host(`reformatter.kart-automation.xyz`)"
       - "traefik.http.routers.cv-reformatter-dev.entrypoints=http"
       - "traefik.http.services.cv-reformatter-dev.loadbalancer.server.port=3000"
       - "traefik.docker.network=coolify"
