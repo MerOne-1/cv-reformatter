@@ -49,8 +49,9 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.cv-reformatter-dev.rule=Host(`reformatter.kart-automation.xyz`)"
-      - "traefik.http.routers.cv-reformatter-dev.entrypoints=http"
+      - "traefik.http.routers.cv-reformatter-dev.entrypoints=web"
       - "traefik.http.services.cv-reformatter-dev.loadbalancer.server.port=3000"
+      - "traefik.docker.network=coolify"
     environment:
       - NODE_ENV=production
       - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-cv_reformatter}?schema=public
