@@ -68,6 +68,8 @@ export const auth = betterAuth({
   // ADVANCED
   // ==========================================
   advanced: {
+    // Desactiver les cookies secure en HTTP (dev/staging)
+    useSecureCookies: process.env.NODE_ENV === "production" && process.env.BETTER_AUTH_URL?.startsWith("https"),
     ipAddress: {
       // Headers pour detecter l'IP reelle (Cloudflare, Vercel, proxies)
       ipAddressHeaders: ["x-forwarded-for", "x-real-ip", "cf-connecting-ip"],
