@@ -41,8 +41,8 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.pnpm/@prisma+client*/node_modules/.prisma ./node_modules/.prisma
 
-# Install prisma CLI for migrations (minimal footprint)
-RUN pnpm add -g prisma@latest
+# Install prisma CLI for migrations (using npm for global install)
+RUN npm install -g prisma
 
 # Copy entrypoint script
 COPY --chown=nextjs:nodejs scripts/docker-entrypoint.sh ./docker-entrypoint.sh
