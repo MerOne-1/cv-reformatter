@@ -112,6 +112,16 @@ services:
       - LLM_ENDPOINT=${LLM_ENDPOINT:-https://api.openai.com/v1/chat/completions}
       - LLM_MODEL=${LLM_MODEL:-gpt-4o}
       - LLM_MAX_TOKENS=${LLM_MAX_TOKENS:-8192}
+      # Soniox (Speech-to-Text)
+      - SONIOX_API_KEY=${SONIOX_API_KEY}
+      # Backblaze B2 (for file access)
+      - B2_ENDPOINT=${B2_ENDPOINT}
+      - B2_REGION=${B2_REGION}
+      - B2_ACCESS_KEY_ID=${B2_ACCESS_KEY_ID}
+      - B2_SECRET_ACCESS_KEY=${B2_SECRET_ACCESS_KEY}
+      - B2_BUCKET_NAME=${B2_BUCKET_NAME}
+      - B2_BUCKET_CV_RAW=${B2_BUCKET_CV_RAW}
+      - B2_BUCKET_CV_FINAL=${B2_BUCKET_CV_FINAL}
     depends_on:
       db:
         condition: service_healthy
