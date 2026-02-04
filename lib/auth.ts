@@ -2,6 +2,9 @@ import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { prisma } from "./db";
 
+// Domaines email autorises (whitelist)
+const ALLOWED_EMAIL_DOMAINS = ["rupturae.com"];
+
 export const auth = betterAuth({
   database: prismaAdapter(prisma, {
     provider: "postgresql",
@@ -77,6 +80,17 @@ export const auth = betterAuth({
   databaseHooks: {
     user: {
       create: {
+        before: async (user) => {
+          // Restriction par domaine email
+          const emailDomain = user.email.split("@")[1]?.toLowerCase();
+
+          if (!emailDomain || !ALLOWED_EMAIL_DOMAINS.includes(emailDomain)) {
+            console.log(`[Better Auth] Access denied for email domain: ${emailDomain}`);
+            throw new Error("Acces refuse. Seuls les emails @rupturae.com sont autorises.");
+          }
+
+          return { data: user };
+        },
         after: async (user) => {
           // Log user ID only, not email (PII/GDPR compliance)
           console.log(`[Better Auth] New user created: ${user.id}`);
