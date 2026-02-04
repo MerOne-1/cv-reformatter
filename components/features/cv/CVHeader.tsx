@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { FileText, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/layout/theme-toggle';
+import { UserMenu } from '@/components/features/auth/user-menu';
 
 export function CVHeader() {
   return (
@@ -21,13 +22,14 @@ export function CVHeader() {
         </div>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-3">
         <ThemeToggle />
         <Link href="/settings">
           <Button variant="ghost" size="icon-sm">
             <Settings className="w-4 h-4" />
           </Button>
         </Link>
+        <UserMenu />
       </div>
     </header>
   );
