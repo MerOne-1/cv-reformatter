@@ -44,8 +44,7 @@ services:
       dockerfile: Dockerfile
     container_name: cv-reformatter-app
     restart: unless-stopped
-    ports:
-      - "${APP_PORT:-3000}:3000"
+    # Port exposed via Traefik only - no direct host mapping
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.cv-reformatter-dev.rule=Host(`reformatter.kart-automation.xyz`)"
