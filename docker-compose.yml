@@ -46,6 +46,11 @@ services:
     restart: unless-stopped
     ports:
       - "${APP_PORT:-3000}:3000"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.cv-reformatter-dev.rule=Host(`reformatter.kart-automation.xyz`)"
+      - "traefik.http.routers.cv-reformatter-dev.entrypoints=http"
+      - "traefik.http.services.cv-reformatter-dev.loadbalancer.server.port=3000"
     environment:
       - NODE_ENV=production
       - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-cv_reformatter}?schema=public
@@ -86,6 +91,7 @@ services:
         condition: service_healthy
     networks:
       - cv-network
+      - coolify
 
   worker:
     build:
@@ -125,3 +131,5 @@ volumes:
 networks:
   cv-network:
     driver: bridge
+  coolify:
+    external: true
