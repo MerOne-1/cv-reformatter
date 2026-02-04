@@ -221,7 +221,14 @@ export async function POST(
       console.log(`[Audio Upload] Transcription job queued for ${audioNote.id}`);
     } catch (queueError) {
       console.error('[Audio Upload] Failed to queue transcription job:', queueError);
-      // Don't fail the upload if queue fails - transcription can be retried later
+      // Marquer l'audio comme FAILED si la queue Redis échoue
+      await prisma.audioNote.update({
+        where: { id: audioNote.id },
+        data: {
+          status: 'FAILED',
+          transcription: `Erreur: échec de connexion au serveur de transcription. ${queueError instanceof Error ? queueError.message : ''}`,
+        },
+      });
     }
 
     // Générer une URL signée pour l'accès immédiat
