@@ -10,6 +10,9 @@ export const auth = betterAuth({
   secret: process.env.BETTER_AUTH_SECRET,
   trustedOrigins: process.env.BETTER_AUTH_URL ? [process.env.BETTER_AUTH_URL] : [],
 
+  // ==========================================
+  // PROVIDERS
+  // ==========================================
   socialProviders: {
     google: {
       clientId: process.env.GOOGLE_CLIENT_ID!,
@@ -19,15 +22,58 @@ export const auth = betterAuth({
     },
   },
 
+  // ==========================================
+  // SESSIONS
+  // ==========================================
   session: {
-    expiresIn: 60 * 60 * 24 * 7, // 7 days
-    updateAge: 60 * 60 * 24, // Refresh each day
+    expiresIn: 60 * 60 * 24 * 7, // 7 jours
+    updateAge: 60 * 60 * 24, // Refresh chaque jour
+    freshAge: 60 * 5, // Session "fresh" pendant 5 min (pour actions sensibles)
     cookieCache: {
       enabled: true,
-      maxAge: 60 * 5, // Cache cookie 5 min
+      maxAge: 60 * 5, // Cache cookie 5 min (reduit DB calls)
     },
   },
 
+  // ==========================================
+  // RATE LIMITING (anti brute-force)
+  // ==========================================
+  rateLimit: {
+    enabled: true,
+    window: 60, // 60 secondes
+    max: 100, // 100 requetes max
+    storage: "memory", // Utiliser "database" en prod avec table RateLimit
+    customRules: {
+      // Regles strictes pour endpoints sensibles
+      "/sign-in/social": { window: 10, max: 5 },
+      "/sign-up/*": { window: 60, max: 5 },
+    },
+  },
+
+  // ==========================================
+  // ACCOUNT LINKING
+  // ==========================================
+  account: {
+    accountLinking: {
+      enabled: true,
+      trustedProviders: ["google"],
+      allowDifferentEmails: false,
+    },
+  },
+
+  // ==========================================
+  // ADVANCED
+  // ==========================================
+  advanced: {
+    ipAddress: {
+      // Headers pour detecter l'IP reelle (Cloudflare, Vercel, proxies)
+      ipAddressHeaders: ["x-forwarded-for", "x-real-ip", "cf-connecting-ip"],
+    },
+  },
+
+  // ==========================================
+  // HOOKS (lifecycle callbacks)
+  // ==========================================
   databaseHooks: {
     user: {
       create: {

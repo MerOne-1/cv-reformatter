@@ -40,3 +40,32 @@ export async function requireAuth() {
 
   return user;
 }
+
+/**
+ * Verifie si la session est "fresh" (recente)
+ * Utile pour les actions sensibles (changement mot de passe, suppression compte, etc.)
+ *
+ * @param maxAgeMs - Age maximum de la session en millisecondes (defaut: 5 minutes)
+ * @throws Error si la session n'est pas fresh
+ */
+export async function requireFreshSession(maxAgeMs: number = 5 * 60 * 1000) {
+  const session = await auth.api.getSession({
+    headers: await headers(),
+    query: {
+      disableCookieCache: true, // Force DB check pour avoir l'heure exacte
+    },
+  });
+
+  if (!session) {
+    throw new Error("Unauthorized");
+  }
+
+  // Verifier freshness basee sur la creation de la session
+  const sessionAge = Date.now() - new Date(session.session.createdAt).getTime();
+
+  if (sessionAge > maxAgeMs) {
+    throw new Error("Session expired for sensitive action. Please re-authenticate.");
+  }
+
+  return session.user;
+}
