@@ -48,7 +48,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.cv-reformatter-dev.rule=Host(`reformatter.kart-automation.xyz`)"
-      - "traefik.http.routers.cv-reformatter-dev.entrypoints=web"
+      - "traefik.http.routers.cv-reformatter-dev.entrypoints=http"
       - "traefik.http.services.cv-reformatter-dev.loadbalancer.server.port=3000"
       - "traefik.docker.network=coolify"
     environment:
